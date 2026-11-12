@@ -8,8 +8,8 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | Preflight: repo, strict TypeScript, env template, secret scan, Testnet accounts, trust lines | Done, except the manual RLUSD claim. Treasury RLUSD balance was 0 at last check |
-| M1 | One real RLUSD payment from a script | Blocked on the RLUSD claim |
+| M0 | Preflight: repo, strict TypeScript, env template, secret scan, Testnet accounts, trust lines | Done. RLUSD claimed; `pnpm preflight` passes (see `docs/m0-notes.md`) |
+| M1 | One real RLUSD payment from a script | Done. 2 validated `tesSUCCESS` payments of 1 RLUSD (cross-border and domestic suppliers) with exact balance deltas; see `docs/m1-notes.md` |
 | M2 | Pure policy engine | Done. 169 tests in 5 files (per `docs/m2-notes.md`) |
 | M3 | Payment guard with persistence | Not started |
 | M4 | Owner policy API and page, audit events | Not started |
@@ -19,6 +19,10 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M8 | Demo hardening, video, threat model | Not started |
 
 The hosting decision for the deployed demo URL has not been made.
+
+Security review of the M0 to M2 code: done (0 Critical, 1 High and 6 Medium defects fixed; one M3 precondition tracked). See `docs/security-review.md`; rules for M3 and later are in `docs/secure-coding-standards.md`.
+
+Demo budget: the RLUSD faucet gives 10 RLUSD per claim per 24 h per account, so demo fixtures are scaled to about 8 to 10 RLUSD, not the 1,000 RLUSD in spec 13A (see the scaled-fixture note there).
 
 ## Architecture
 
@@ -37,15 +41,15 @@ Three processes and four packages, each process with its own credentials.
 
 Trust boundary: the agent never holds keys or policy. It can only ask the guard to pay an invoice. The guard rebuilds the payment from its own canonical records, ignoring any amount or destination the model supplies, runs the policy checks, and signs only on an allow decision. The owner sets limits outside the agent. The enforcement is application-layer, not a trustless on-ledger restriction. The spec adds a revocable regular key (M7) as an on-ledger backstop that lets the owner cut off the guard's signing authority.
 
-Apart from `packages/contracts` and `packages/policy-engine`, the apps and packages are typechecked placeholders so far.
+Apart from `packages/contracts`, `packages/policy-engine` and `packages/xrpl-adapter`, the apps and packages are typechecked placeholders so far.
 
 ## Repo layout
 
 ```text
 apps/            web, payment-guard, agent
 packages/        contracts, database, xrpl-adapter, policy-engine
-scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight
-docs/            m0-notes.md, m2-notes.md, task1-changes.md
+scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, setup-hooks, git-hooks/
+docs/            m0-notes.md, m1-notes.md, m2-notes.md, task1-changes.md, security-review.md, secure-coding-standards.md
 Flow_AI_MVP_README_v3.5.md   spec of record
 .env.example     environment template (placeholders only)
 ```
@@ -63,24 +67,29 @@ Scripts:
 
 - `pnpm setup:testnet-accounts`: creates and faucet-funds the treasury and three supplier wallets. Seeds go to `.secrets/testnet-wallets.json`. Safe to rerun.
 - `pnpm trust-lines`: creates the RLUSD trust lines for those accounts. Skips ones that exist.
-- `pnpm preflight`: read-only check of network, issuer, currency hex, reserves, trust lines and treasury RLUSD balance. It exits non-zero (2, BLOCKED) until the treasury holds RLUSD.
-- `pnpm secret-scan`: scans for seed-shaped secrets without printing matches.
+- `pnpm preflight`: read-only check of network, issuer, currency hex, reserves, trust lines and treasury RLUSD balance. It exits non-zero (2, BLOCKED) when the treasury holds no RLUSD.
+- `pnpm m1:send -- --dry-run` / `pnpm m1:send -- --to domestic`: M1 sender. Sends 1 RLUSD (hard cap 2, treasury keeps at least 5, at most 2 real payments, Testnet only), logs to the gitignored `.secrets/m1-transactions.json`, prints the validated hash and explorer URL, and proves the balance delta.
+- `pnpm secret-scan`: scans staged, tracked and untracked files for seeds, hex keys, signed blobs, API keys, tokens and PEM blocks without printing matches.
+- `pnpm setup:hooks`: opt-in; installs the versioned pre-commit hook for this clone.
+- `pnpm lint`: ESLint with typed rules and `eslint-plugin-security` (zero warnings allowed).
+- `pnpm run audit`: `pnpm audit --prod` (use `run`: bare `pnpm audit` is the built-in and also checks dev dependencies).
 - `pnpm typecheck`: strict TypeScript across the root and all workspaces.
-- `pnpm test`: runs workspace tests (the policy engine suite).
+- `pnpm test`: runs workspace tests (contracts, policy engine and XRPL adapter suites; the adapter tests use a mocked ledger and spend no RLUSD).
 
-RLUSD claim (manual): open https://tryrlusd.com/, choose Testnet, and claim for the treasury address `rHwNC93iYF7ZcSpZJbVZiwLmpiCKauoHuo`. Then run `pnpm preflight` and expect `PREFLIGHT: PASS`. Record the amount received in `docs/m0-notes.md`.
+RLUSD claim (manual, only needed to top up): open https://tryrlusd.com/, choose Testnet, and claim for the treasury address `rHwNC93iYF7ZcSpZJbVZiwLmpiCKauoHuo`. The faucet gives 10 RLUSD per claim per 24 h per account. Run `pnpm preflight` afterwards.
 
 ## Security notes
-
-- Testnet only. The scripts fail closed on any other network value, and the Mainnet RLUSD issuer must never be used.
-- Seeds live only in the gitignored `.secrets/` folder. Never commit `.env`; `.env.example` holds placeholders only.
+- Testnet only. Every entry point checks that `XRPL_NETWORK` is exactly `xrpl-testnet`, that `XRPL_WS_URL` is on an exact allowlist (`wss://s.altnet.rippletest.net:51233`), that the RLUSD issuer is not the Mainnet issuer, and that the server reports `network_id` 1. Any mismatch stops the process.
+- Seeds live only in the gitignored `.secrets/` folder and are read only on the signer path. Never commit `.env`; `.env.example` holds placeholders only. On Windows, keep the repo in a user-only folder and restrict `.secrets` with `icacls .secrets /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"`.
+- Logs and errors go through one redaction helper (`packages/contracts/src/redact.ts`) that scrubs family seeds, hex keys, signed transaction blobs, API keys, JWT/Bearer tokens and PEM blocks.
 - `PAYMENT_EXECUTION_ENABLED` is a kill switch: execution is allowed only when it is exactly `true`.
-- Secret scan: the repo has no versioned hook. A local, unversioned hook exists at `.git/hooks/pre-commit` on the M0 machine and runs `pnpm secret-scan`, blocking the commit on failure. On a fresh clone, create that file yourself (a bash script that changes to the repo root, runs `pnpm secret-scan`, and exits 1 on failure) and make it executable.
-
+- Secret scan: `pnpm secret-scan` checks the staged index content plus tracked and untracked files. A versioned pre-commit hook lives in `scripts/git-hooks/pre-commit`. Enable it once per clone with `pnpm setup:hooks` (opt-in; it sets `core.hooksPath` for that clone only). Hooks can be skipped, so CI must run the same scan.
+- Supply chain: all dependency versions are exact, the lockfile is committed, `.npmrc` sets `ignore-scripts=true`, and `pnpm run audit` (`pnpm audit --prod`) must be clean for production dependencies.
+- Reporting and rules: see [SECURITY.md](SECURITY.md), the audit in [docs/security-review.md](docs/security-review.md), and the binding rules for M3 and later in [docs/secure-coding-standards.md](docs/secure-coding-standards.md) (spec 13.4).
 ## Documentation and resources
 
 - Spec: [Flow_AI_MVP_README_v3.5.md](Flow_AI_MVP_README_v3.5.md)
-- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
+- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m1-notes.md](docs/m1-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
 - RLUSD on the XRPL (Ripple docs): https://docs.ripple.com/products/stablecoin/developer-resources/rlusd-on-the-xrpl
 - Send a trust line token: https://xrpl.org/docs/tutorials/payments/send-a-trust-line-token
 - xrpl.js: https://js.xrpl.org/
