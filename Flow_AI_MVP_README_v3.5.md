@@ -1571,6 +1571,11 @@ For the MVP, the trust assumptions are:
 
 Document this honestly. A production design would need a deeper custody/security review (for example institutional custody such as Ripple Custody, or a policy-engine wallet) and may move more enforcement to constrained on-ledger controls or a separately governed signer architecture. Known limitations to state in `docs/threat-model.md`: single shared agent-to-guard token, env-seed key custody on a hosted platform, and guard and signer in one process.
 
+
+### 13.4 Secure coding standards (binding)
+
+Security controls for M3 onward are specified as testable rules in [`docs/secure-coding-standards.md`](docs/secure-coding-standards.md), mapped to OWASP ASVS, the OWASP Top 10 and the OWASP LLM Top 10. They bind coding agents and humans alike and extend 13.1 to 13.3 and the coding-agent contract in section 20. The current audit of the M0 to M2 code is in [`docs/security-review.md`](docs/security-review.md), and vulnerability reporting is described in `SECURITY.md`. Where a standard conflicts with a milestone shortcut, the standard wins unless the owner records an explicit exception in `docs/threat-model.md`.
+
 ---
 
 ## 13A. Repeatable demo fixture
@@ -1608,6 +1613,8 @@ Use clearly labelled Testnet-only sample values. The values below are illustrati
 | `INV-105` | Supplier C (approved, domestic) | `60.00 RLUSD` | Eligible | Within caps; shows the domestic corridor |
 
 `INV-101` plus `INV-105` total `180.00 RLUSD`, within the `400.00` daily limit, so both can pay in one day.
+
+**Scaled fixture for the real Testnet faucet (verified in M1).** The RLUSD faucet gives 10 RLUSD per claim per 24 h, so the real treasury holds about 8 to 10 RLUSD, not 1,000. Suggested live values, which keep the same outcome classes: treasury 10.00 RLUSD; max per payment 2.00; daily automated limit 4.00; minimum treasury reserve 2.50; `INV-101` 1.20 (eligible), `INV-102` 2.75 (blocked: per-payment cap), `INV-103` 0.90 (blocked: supplier not approved), `INV-104` 8.00 (blocked: reserve and per-payment cap), `INV-105` 0.60 (eligible). `INV-101` plus `INV-105` is 1.80, inside the 4.00 daily limit. This is the 1/100 scaling of the table above. Any real payment spends real faucet budget, so rehearse with the dry-run path and keep live payments to `INV-101` and `INV-105`.
 
 After a successful `INV-101` payment, the demo should show a reduced onchain RLUSD balance, the updated daily spend allowance and a validated transaction record. Use `reset-demo` (section 16) before each full demo. The exact Testnet balance can differ if the Testnet is reset; the application must query the ledger rather than rely on a hardcoded balance.
 
@@ -2065,6 +2072,7 @@ When an AI coding agent receives this repository, it must follow this contract.
 3. Identify what is already implemented and what is incomplete. Do not assume the repository is empty.
 4. Produce a concise implementation plan mapped to P0 acceptance criteria and milestones M0 to M8.
 5. Identify security-sensitive files and confirm that no secrets are present in source control. Confirm that no tool writes a seed into a tracked or public file.
+6. Read `docs/secure-coding-standards.md` (13.4) and treat its rules as part of this contract; run `pnpm lint`, `pnpm secret-scan` and `pnpm audit` before reporting a task complete.
 
 ### While implementing
 1. Work in small, testable increments. After each increment, run relevant type checks, linting and tests.

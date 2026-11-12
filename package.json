@@ -13,15 +13,23 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "setup:testnet-accounts": "tsx scripts/setup-testnet-accounts.ts",
     "trust-lines": "tsx scripts/trust-lines.ts",
-    "preflight": "tsx scripts/preflight.ts"
+    "preflight": "tsx scripts/preflight.ts",
+    "m1:send": "tsx scripts/m1-send-rlusd.ts",
+    "lint": "eslint . --max-warnings 0",
+    "audit": "pnpm audit --prod",
+    "setup:hooks": "tsx scripts/setup-hooks.ts"
   },
   "dependencies": {
     "dotenv": "18.0.10",
     "xrpl": "5.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "24.19.2",
+    "eslint": "10.14.0",
+    "eslint-plugin-security": "4.2.1",
     "tsx": "4.23.15",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2"
   }
 }

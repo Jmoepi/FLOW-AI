@@ -5,6 +5,7 @@ import { z } from "zod";
  * Non-negative, at most 12 integer digits and 6 fractional digits, no sign, no exponent,
  * no whitespace, no leading zeros (except a single "0").
  */
+// eslint-disable-next-line security/detect-unsafe-regex -- fully bounded and anchored; no ambiguous nested repetition
 export const MONEY_STRING_PATTERN = /^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$/;
 export const MONEY_MAX_DECIMALS = 6;
 

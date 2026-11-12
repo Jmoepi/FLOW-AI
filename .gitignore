@@ -25,3 +25,13 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+# Secret material and local-only files (defence in depth; the secret-scan also rejects these names)
+*.pem
+*.key
+*.p12
+*.pfx
+*.tsbuildinfo
+.env*.local
+npm-debug.log*
+.vitest-cache/
+.vitest/

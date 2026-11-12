@@ -69,6 +69,7 @@ export type CheckId = z.infer<typeof CheckIdSchema>;
 
 const IsoInstant = z
   .string()
+  // eslint-disable-next-line security/detect-unsafe-regex -- fully bounded and anchored; no ambiguous nested repetition
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/, "expected ISO 8601 instant with Z or offset");
 
 export const InvoiceStatusSchema = z.enum(["draft", "open", "processing", "paid", "blocked", "cancelled"]);
@@ -85,7 +86,7 @@ export const PaymentStatusSchema = z.enum([
 export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
 export const ReservationStatusSchema = z.enum(["reserved", "committed", "released"]);
 
-/** What the agent sends to the guard (9.2). Unknown keys are stripped: the agent cannot inject facts. */
+/** What the agent sends to the guard (9.2). Unknown keys are deliberately STRIPPED (13.1A: model-supplied facts are ignored, not trusted). Every other contract schema is strict (unknown keys rejected). */
 export const AgentPaymentRequestSchema = z.object({
   invoice_id: z.string().min(1).max(128),
   idempotency_key: z.string().min(1).max(128),
@@ -101,19 +102,19 @@ export type AgentPaymentRequest = z.infer<typeof AgentPaymentRequestSchema>;
  * Everything the pure engine needs, resolved by the guard from canonical records and the live ledger.
  * No I/O and no clock inside the engine: `now`, reserves, balances and the kill-switch value are inputs.
  */
-export const PolicyEvaluationRequestSchema = z.object({
+export const PolicyEvaluationRequestSchema = z.strictObject({
   /** The decision time (ISO 8601 with Z/offset). Drives mandate expiry and the business-day window. */
   now: IsoInstant,
   /** Raw value of PAYMENT_EXECUTION_ENABLED. Only the exact string "true" allows execution (13.1C). */
   kill_switch_value: z.unknown().optional(),
   request: AgentPaymentRequestSchema,
-  business: z.object({
+  business: z.strictObject({
     id: z.string().min(1),
     is_active: z.boolean(),
     /** businesses.timezone, the single source (IANA name, e.g. Africa/Johannesburg). */
     timezone: z.string().min(1),
   }),
-  wallet: z.object({
+  wallet: z.strictObject({
     id: z.string().min(1),
     business_id: z.string().min(1),
     network: z.string(),
@@ -123,7 +124,7 @@ export const PolicyEvaluationRequestSchema = z.object({
     is_active: z.boolean(),
   }),
   policy: TreasuryPolicySchema,
-  invoice: z.object({
+  invoice: z.strictObject({
     id: z.string().min(1),
     business_id: z.string().min(1),
     supplier_id: z.string().min(1),
@@ -132,7 +133,7 @@ export const PolicyEvaluationRequestSchema = z.object({
     currency: z.string(),
     status: InvoiceStatusSchema,
   }),
-  supplier: z.object({
+  supplier: z.strictObject({
     id: z.string().min(1),
     business_id: z.string().min(1),
     xrpl_address: z.string(),
@@ -142,20 +143,20 @@ export const PolicyEvaluationRequestSchema = z.object({
     country_code: z.string().optional(),
   }),
   /** Server-side configuration (10.1). The payment asset is always the configured pair. */
-  config: z.object({
+  config: z.strictObject({
     network: z.string(),
     rlusd_currency_hex: z.string().min(1),
     rlusd_issuer: z.string().min(1),
     rlusd_display_symbol: z.string().min(1),
   }),
-  balances: z.object({
+  balances: z.strictObject({
     /** Live RLUSD balance queried at decision time. null/invalid means unavailable and blocks. */
     rlusd_balance: z.unknown(),
     /** Live treasury XRP balance in drops. null means unavailable and blocks. */
     xrp_balance_drops: DropsStringSchema.nullable(),
   }),
   /** Ledger reserve values queried at runtime (10.2). Never hardcoded in the engine. */
-  xrpl_reserves: z.object({
+  xrpl_reserves: z.strictObject({
     base_reserve_drops: DropsStringSchema,
     owner_reserve_drops: DropsStringSchema,
     treasury_owner_count: z.number().int().min(0),
@@ -165,7 +166,7 @@ export const PolicyEvaluationRequestSchema = z.object({
   destination_trustline: z.enum(["present", "absent", "unknown"]),
   /** daily_spend_reservations rows for the business (any date; the engine filters by business date). */
   reservations: z.array(
-    z.object({
+    z.strictObject({
       payment_id: z.string(),
       business_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       amount: MoneyStringSchema,
@@ -174,7 +175,7 @@ export const PolicyEvaluationRequestSchema = z.object({
   ),
   /** Existing payments for the business (at least those for this invoice or idempotency key). */
   payments: z.array(
-    z.object({
+    z.strictObject({
       id: z.string(),
       invoice_id: z.string(),
       idempotency_key: z.string(),
@@ -184,7 +185,7 @@ export const PolicyEvaluationRequestSchema = z.object({
 });
 export type PolicyEvaluationRequest = z.infer<typeof PolicyEvaluationRequestSchema>;
 
-export const CheckFailureSchema = z.object({
+export const CheckFailureSchema = z.strictObject({
   check: CheckIdSchema,
   code: DecisionCodeSchema,
   message: z.string(),
@@ -193,13 +194,13 @@ export const CheckFailureSchema = z.object({
 export type CheckFailure = z.infer<typeof CheckFailureSchema>;
 
 /** The payment the guard may reserve and sign. Present only on allow. Built from canonical records only. */
-export const ApprovedPaymentSchema = z.object({
+export const ApprovedPaymentSchema = z.strictObject({
   invoice_id: z.string(),
   supplier_id: z.string(),
   wallet_id: z.string(),
   amount: MoneyStringSchema,
   currency: z.string(),
-  asset: z.object({ currency: z.string(), issuer: z.string() }),
+  asset: z.strictObject({ currency: z.string(), issuer: z.string() }),
   destination: z.string(),
   network: z.string(),
   /** YYYY-MM-DD in the business timezone; the daily_spend_reservations.business_date to use. */
@@ -207,7 +208,7 @@ export const ApprovedPaymentSchema = z.object({
 });
 export type ApprovedPayment = z.infer<typeof ApprovedPaymentSchema>;
 
-export const PolicyDecisionSchema = z.object({
+export const PolicyDecisionSchema = z.strictObject({
   allowed: z.boolean(),
   /** "ALLOWED" or the code of the FIRST failed check in the 6.3 order. */
   decision_code: z.union([z.literal("ALLOWED"), DecisionCodeSchema]),

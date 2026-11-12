@@ -6,8 +6,9 @@
  * Usage: pnpm preflight [treasuryAddress]
  *   Address resolution: argv[2], then TREASURY_ADDRESS env, then .secrets/testnet-wallets.json (address only).
  */
-import { Client, dropsToXrp } from "xrpl";
-import { loadConfig, readWalletsFile, secretsFileExists, toErrorMessage, type StoredWallet } from "./lib/common";
+import { dropsToXrp, isValidClassicAddress, xrpToDrops } from "xrpl";
+import { connectTestnetClient, isGreater } from "../packages/xrpl-adapter/src/index";
+import { loadConfig, readPublicWallets, secretsFileExists, toErrorMessage, type PublicWallet } from "./lib/common";
 
 type Status = "PASS" | "FAIL" | "BLOCKED" | "INFO";
 const results: Array<{ status: Status; name: string; detail: string }> = [];
@@ -29,23 +30,20 @@ async function main(): Promise<void> {
   report("PASS", "XRPL_NETWORK", `${cfg.network} (Testnet only)`);
 
   let treasury = process.argv[2] ?? process.env.TREASURY_ADDRESS;
-  let suppliers: Array<Omit<StoredWallet, "seed">> = [];
+  let suppliers: PublicWallet[] = [];
   if (secretsFileExists()) {
-    const file = readWalletsFile();
-    treasury ??= file.wallets.find((w) => w.role === "treasury")?.address;
-    suppliers = file.wallets.filter((w) => w.role === "supplier").map((w) => ({ label: w.label, role: w.role, kind: w.kind, address: w.address }));
+    const wallets = readPublicWallets(); // addresses only: preflight never needs a seed
+    treasury ??= wallets.find((w) => w.role === "treasury")?.address;
+    suppliers = wallets.filter((w) => w.role === "supplier");
   }
   if (!treasury) throw new Error("No treasury address. Pass one as an argument, set TREASURY_ADDRESS, or run setup-testnet-accounts.");
+  if (!isValidClassicAddress(treasury)) throw new Error("Treasury address is not a valid XRPL classic address.");
 
-  const client = new Client(cfg.wsUrl);
-  await client.connect();
+  const client = await connectTestnetClient(cfg.network, cfg.wsUrl); // asserts server network_id === 1
   try {
     // 2. Connected network sanity + reserves (never hardcoded)
     const si = (await client.request({ command: "server_info" })).result.info;
     report("PASS", "Connected", `${cfg.wsUrl} (server ${si.build_version}, network_id=${String(si.network_id ?? "n/a")})`);
-    if (si.network_id !== undefined && si.network_id !== 1) {
-      report("FAIL", "Testnet network_id", `expected 1, got ${si.network_id}`);
-    }
     const vl = si.validated_ledger;
     if (!vl) throw new Error("server_info returned no validated_ledger");
     const reserveBase = vl.reserve_base_xrp;
@@ -56,7 +54,7 @@ async function main(): Promise<void> {
     try {
       const iss = (await client.request({ command: "account_info", account: cfg.issuer, ledger_index: "validated" })).result.account_data;
       report("PASS", "Issuer account exists", cfg.issuer);
-      const flags = iss.Flags as number;
+      const flags = iss.Flags;
       report(
         (flags & LSF_REQUIRE_AUTH) || (flags & LSF_GLOBAL_FREEZE) ? "FAIL" : "PASS",
         "Issuer flags",
@@ -71,13 +69,16 @@ async function main(): Promise<void> {
     try {
       const ad = (await client.request({ command: "account_info", account: treasury, ledger_index: "validated" })).result.account_data;
       treasuryOwnerCount = ad.OwnerCount;
-      const balanceXrp = Number(dropsToXrp(ad.Balance));
-      const reserve = reserveBase + reserveInc * ad.OwnerCount;
+      // Exact integer drops: no floating point in balance/reserve decisions.
+      const balanceDrops = BigInt(ad.Balance);
+      const reserveDrops = BigInt(xrpToDrops(String(reserveBase))) + BigInt(xrpToDrops(String(reserveInc))) * BigInt(ad.OwnerCount);
+      const balanceXrp = String(dropsToXrp(ad.Balance));
+      const reserve = String(dropsToXrp(reserveDrops.toString()));
       report("PASS", "Treasury activated", treasury);
       report(
-        balanceXrp > reserve ? "PASS" : "FAIL",
+        balanceDrops > reserveDrops ? "PASS" : "FAIL",
         "Treasury XRP balance",
-        `${balanceXrp} XRP (reserve ${reserve} XRP for ${ad.OwnerCount} owned objects; spendable ${(balanceXrp - reserve).toFixed(6)} XRP)`,
+        `${balanceXrp} XRP (reserve ${reserve} XRP for ${ad.OwnerCount} owned objects; spendable ${String(dropsToXrp((balanceDrops - reserveDrops).toString()))} XRP)`,
       );
     } catch (err) {
       report("FAIL", "Treasury activated", isNotFound(err) ? `${treasury} not found: fund it from the Testnet faucet` : toErrorMessage(err));
@@ -89,8 +90,7 @@ async function main(): Promise<void> {
       const match = lines.find((l) => l.currency.toUpperCase() === cfg.currencyHex && l.account === cfg.issuer);
       if (match) {
         report("PASS", "RLUSD trust line (issuer + hex pair)", `limit ${match.limit}, freeze=${String(match.freeze ?? false)}`);
-        const bal = Number(match.balance);
-        if (bal > 0) {
+        if (isGreater(match.balance, "0")) {
           report("PASS", "Treasury RLUSD balance", `${match.balance} RLUSD (scale the 13A fixture to this amount)`);
         } else {
           report("BLOCKED", "Treasury RLUSD balance", "0 RLUSD: blocked on manual RLUSD claim (see docs/m0-notes.md)");

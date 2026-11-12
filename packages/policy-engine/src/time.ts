@@ -1,3 +1,4 @@
+// eslint-disable-next-line security/detect-unsafe-regex -- fully bounded and anchored; no ambiguous nested repetition
 const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
 /** Parse an ISO 8601 instant (with Z or offset) to epoch milliseconds, or null. Pure: no clock access. */

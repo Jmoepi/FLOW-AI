@@ -1,5 +1,7 @@
 # M0 Preflight notes
 
+**Update (M1 done):** the RLUSD claim has since been made and `pnpm preflight` passes. The status line below is the original M0 snapshot. See "Facts verified after M0" at the end and `docs/m1-notes.md`.
+
 **Status: BLOCKED on manual RLUSD claim.** Everything scriptable in M0 is done and verified on Testnet. The treasury holds XRP and a valid RLUSD trust line but 0 RLUSD. The claim at tryrlusd.com is a web UI and was not automated.
 
 Testnet only. No git repository exists in this folder (`git rev-parse --is-inside-work-tree` failed), so nothing was committed and no git hook was installed. `git init` was not run. `pnpm secret-scan` works with or without git and should be wired as a pre-commit hook and CI step once the repo is initialised.
@@ -77,3 +79,10 @@ Not resolved (still unverified):
 ## Repository
 - Git repo now exists; branch `main` tracks `origin` at https://github.com/Jmoepi/FLOW-AI.git. First commit contains only `README.md`; everything else is still untracked.
 - Local pre-commit hook installed at `.git/hooks/pre-commit` (not versioned, not git config). It runs `pnpm secret-scan` and blocks the commit on failure. Verified by running the script directly: PASS, exit 0.
+
+## Facts verified after M0 (updated during M1)
+- **Faucet amount and rate limit:** tryrlusd.com gives 10 RLUSD per claim, once per 24 h per account (reported from a real claim by the project owner; I did not automate or re-test the faucet). The treasury held 8 RLUSD when M1 started (how the 8 got there was not recorded in this repo). Budget accordingly: demo fixtures must be scaled to about 8 to 10 RLUSD (see the scaled-fixture note in spec 13A).
+- **Issuer + currency hex pair: confirmed on-ledger.** A real RLUSD claim credited the treasury's trust line for `rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV` / `524C555344000000000000000000000000000000`, and two M1 payments delivered exactly that currency and issuer.
+- **Supplier trust-line receive behaviour: proven.** Cross-border and domestic supplier accounts each received 1 RLUSD via their scripted trust lines (validated `tesSUCCESS`, exact balance deltas). No `RequireAuth` or `GlobalFreeze` on the issuer.
+- **M1 status:** done. Hashes and balances are in `docs/m1-notes.md`. Treasury is at 6 RLUSD after M1.
+- Still unverified: amendment status beyond Payment/TrustSet/SetRegularKey, revoked regular-key failure code (M7), current Anthropic model id, judging terms, Privy/OWS capabilities, regulatory position, cost/speed comparisons.
