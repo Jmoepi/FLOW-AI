@@ -2,7 +2,8 @@
  * M0: submit TrustSet to the RLUSD issuer (from env, spec 10.2) for every supplier wallet and the
  * treasury, skipping accounts that already hold the line. Testnet only. Never prints seeds.
  */
-import { Client, TrustSetFlags, Wallet, type TransactionMetadata } from "xrpl";
+import { TrustSetFlags, Wallet, type Client, type TransactionMetadata } from "xrpl";
+import { connectTestnetClient } from "../packages/xrpl-adapter/src/index";
 import { loadConfig, readWalletsFile, toErrorMessage } from "./lib/common";
 
 // Limit used in Ripple's official Testnet trust line example (a ceiling, not a balance).
@@ -16,8 +17,7 @@ async function hasLine(client: Client, address: string, issuer: string, hex: str
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const file = readWalletsFile();
-  const client = new Client(cfg.wsUrl);
-  await client.connect();
+  const client = await connectTestnetClient(cfg.network, cfg.wsUrl);
   let failed = false;
   try {
     for (const w of file.wallets) {

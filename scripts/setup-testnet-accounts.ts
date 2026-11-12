@@ -4,7 +4,8 @@
  * Only public classic addresses are ever printed. Idempotent: an existing secrets file is reused.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { Client, Wallet } from "xrpl";
+import { Wallet } from "xrpl";
+import { connectTestnetClient } from "../packages/xrpl-adapter/src/index";
 import {
   ROOT,
   SECRETS_DIR,
@@ -18,9 +19,18 @@ import {
   type WalletsFile,
 } from "./lib/common";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 /** The secrets location must be gitignored BEFORE the file is created. */
 function assertSecretsIgnored(): void {
+  // Ask git itself first (honours every ignore rule and negation); fall back to a literal .gitignore check.
+  try {
+    execFileSync("git", ["check-ignore", "-q", SECRETS_FILE], { cwd: ROOT, stdio: "ignore" });
+    return;
+  } catch (err) {
+    if ((err as { status?: number }).status === 1) throw new Error("git does not ignore .secrets/testnet-wallets.json. Refusing to create the secrets file.", { cause: err });
+    // status 128 (not a repository) or git missing: use the textual check below
+  }
   const gitignorePath = path.join(ROOT, ".gitignore");
   const lines = existsSync(gitignorePath)
     ? readFileSync(gitignorePath, "utf8").split(/\r?\n/).map((l) => l.trim())
@@ -37,7 +47,7 @@ const PLAN: Array<Pick<StoredWallet, "label" | "role" | "kind">> = [
   { label: "supplier-extra", role: "supplier", kind: "extra" },
 ];
 
-async function isActivated(client: Client, address: string): Promise<boolean> {
+async function isActivated(client: Awaited<ReturnType<typeof connectTestnetClient>>, address: string): Promise<boolean> {
   try {
     await client.request({ command: "account_info", account: address, ledger_index: "validated" });
     return true;
@@ -65,13 +75,12 @@ async function main(): Promise<void> {
         return { ...p, address: w.address, seed: w.seed! };
       }),
     };
-    mkdirSync(SECRETS_DIR, { recursive: true });
+    mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
     writeFileSync(SECRETS_FILE, JSON.stringify(file, null, 2) + "\n", { mode: 0o600, flag: "wx" });
     console.log(`Created ${path.relative(ROOT, SECRETS_FILE)} (gitignored, contains seeds, never print or share).`);
   }
 
-  const client = new Client(cfg.wsUrl);
-  await client.connect();
+  const client = await connectTestnetClient(cfg.network, cfg.wsUrl);
   try {
     for (const w of file.wallets) {
       if (await isActivated(client, w.address)) {

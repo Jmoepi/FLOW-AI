@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Flow AI pre-commit: blocks the commit if the secret scan fails or cannot run (fail closed).
+# Scans the STAGED content (git index) as well as tracked/untracked files. See scripts/secret-scan.ts.
+# Install (opt-in, once per clone): pnpm setup:hooks
+set -u
+root="$(git rev-parse --show-toplevel)" || { echo "pre-commit: not in a git work tree, commit blocked." >&2; exit 1; }
+cd "$root" || exit 1
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pre-commit: pnpm not found, cannot run secret-scan, commit blocked." >&2
+  exit 1
+fi
+if ! pnpm --silent secret-scan; then
+  echo "pre-commit: secret-scan failed, commit blocked. Remove the secret (and rotate it if it was real)." >&2
+  exit 1
+fi
