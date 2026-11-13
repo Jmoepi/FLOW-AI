@@ -25,13 +25,18 @@ export interface GuardHandle {
   stop: () => Promise<void>;
 }
 
+/** Only what node and tsx need to run. Nothing else from the parent environment reaches the guard (13.1B least privilege). */
+const ENV_ALLOWLIST = ["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "windir", "ComSpec", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "OS", "LANG"] as const;
+export function baseGuardEnv(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const k of ENV_ALLOWLIST) if (parent[k] !== undefined) env[k] = parent[k];
+  return env;
+}
 export function startGuard(opts: GuardLaunchOptions): GuardHandle {
   const cfg = loadConfig(); // fails closed unless Testnet
   const token = randomBytes(32).toString("hex");
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  // The guard must never see an admin database credential or a Supabase service key.
-  delete env.DATABASE_URL;
-  delete env.SUPABASE_SERVICE_ROLE_KEY;
+  // Allowlist, not a copy of process.env: the guard never sees an admin database credential, a Supabase service key or a provider key.
+  const env = baseGuardEnv(process.env);
   Object.assign(env, {
     XRPL_NETWORK: cfg.network,
     XRPL_WS_URL: cfg.wsUrl,

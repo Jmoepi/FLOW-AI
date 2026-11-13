@@ -12,6 +12,7 @@ import { decide, type LedgerFacts } from "../decision/decide";
 import { requestHash } from "../decision/idempotency";
 import { loadCanonical, loadReservationsAndPayments, reloadCanonical, type CanonicalRecords } from "../decision/load";
 import { HttpError } from "../http/errors";
+import type { AuditIntegrity } from "../jobs/audit-verify";
 import type { Reconciler } from "../jobs/reconcile";
 import type { Logger } from "../logger";
 import { invoiceStatusFor, isInFlight } from "../state/payment-machine";
@@ -27,6 +28,13 @@ export interface ServiceDeps {
   executor?: PaymentExecutor;
   /** Backs POST /internal/reconcile. */
   reconciler?: Reconciler;
+  /** Audit chain verify state (AL-3). When it reports a break, execution is blocked like the kill switch. */
+  integrity?: AuditIntegrity;
+}
+/** The kill switch value the policy engine sees. A detected, unacknowledged audit chain break forces it to "not true" (fail closed, 13.1C). */
+export function killSwitchValue(deps: Pick<ServiceDeps, "env" | "integrity">): string | undefined {
+  const env = deps.env();
+  return deps.integrity?.blocked(env) ? "blocked:audit_chain" : env.PAYMENT_EXECUTION_ENABLED;
 }
 const EXPLORER = "https://testnet.xrpl.org/transactions/";
 const CLASSIC_ADDRESS = /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/;
@@ -199,7 +207,7 @@ async function decideInTransaction(
   const { reservations, payments } = await loadReservationsAndPayments(c, businessId, today, records.invoice.id);
   const inFlight = await sumInFlightReserved(c, businessId);
   const decision = decide({
-    now, killSwitchValue: deps.env().PAYMENT_EXECUTION_ENABLED, request: input, records, config,
+    now, killSwitchValue: killSwitchValue(deps), request: input, records, config,
     ledger: { ...ledger, rlusdBalance: effectiveBalance(ledger.rlusdBalance, inFlight) }, reservations, payments,
   });
   const previous = payments.find((p) => p.status === "failed");
@@ -272,7 +280,7 @@ export async function previewEligibility(deps: ServiceDeps, invoiceId: string): 
   const inFlight = await sumInFlightReserved(pool, r.business.id);
   const rlusd = fresh && snapshot ? snapshot.rlusd_balance : null;
   const decision = decide({
-    now, killSwitchValue: deps.env().PAYMENT_EXECUTION_ENABLED,
+    now, killSwitchValue: killSwitchValue(deps),
     request: { invoice_id: r.invoice.id, idempotency_key: `preview:${r.invoice.id}` }, records: r, config,
     ledger: {
       rlusdBalance: effectiveBalance(rlusd, inFlight), xrpDrops: fresh && snapshot ? xrpToDrops(snapshot.xrp_balance) : null,
@@ -287,13 +295,15 @@ export interface StatusView {
   kill_switch: "enabled" | "disabled";
   automation: "enabled" | "disabled" | "unknown";
   snapshot_as_of: string | null;
+  audit_chain: "unverified" | "ok" | "broken" | "error";
 }
 export async function getStatus(deps: ServiceDeps): Promise<StatusView> {
   const { pool, config } = deps;
-  const kill_switch = deps.env().PAYMENT_EXECUTION_ENABLED === "true" ? "enabled" : "disabled";
+  const kill_switch = killSwitchValue(deps) === "true" ? "enabled" : "disabled";
+  const audit_chain = deps.integrity?.status(deps.env()).state ?? "unverified";
   const business = config.businessId === undefined ? null : await getBusiness(pool, config.businessId);
-  if (!business) return { kill_switch, automation: "unknown", snapshot_as_of: null };
+  if (!business) return { kill_switch, automation: "unknown", snapshot_as_of: null, audit_chain };
   const [policy, wallet] = await Promise.all([getPolicy(pool, business.id), getActiveWalletForBusiness(pool, business.id)]);
   const snapshot = wallet ? await getLatestSnapshot(pool, wallet.id) : null;
-  return { kill_switch, automation: policy === null ? "unknown" : policy.enabled ? "enabled" : "disabled", snapshot_as_of: snapshot?.as_of ?? null };
+  return { kill_switch, automation: policy === null ? "unknown" : policy.enabled ? "enabled" : "disabled", snapshot_as_of: snapshot?.as_of ?? null, audit_chain };
 }

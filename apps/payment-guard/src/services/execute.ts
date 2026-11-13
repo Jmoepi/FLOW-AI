@@ -7,7 +7,7 @@ import { KeyedQueue, sendIouPayment, type PaymentEvent } from "@flow-ai/xrpl-ada
 import { createGuardSigner, SignerError } from "../signer/signer";
 import { isInFlight } from "../state/payment-machine";
 import { applyOutcome, cancelUnsigned, GUARD_ACTOR } from "./apply-outcome";
-import { toPublicPayment, type PaymentResult, type ServiceDeps } from "./payments";
+import { killSwitchValue, toPublicPayment, type PaymentResult, type ServiceDeps } from "./payments";
 
 /** Runs one reserved payment through sign -> persist -> submit -> wait -> settle. */
 export interface PaymentExecutor {
@@ -45,7 +45,7 @@ export function createExecutor(deps: ServiceDeps): PaymentExecutor {
     if (!wallet || !wallet.is_active || wallet.signing_key_mode !== "master_env" || wallet.network !== config.network || p.network !== config.network) {
       return (await cancelUnsigned(pool, p.id, "RECORD_INACTIVE", CANCEL_MESSAGES.RECORD_INACTIVE ?? "", GUARD_ACTOR)) ?? (await getPayment(pool, p.id));
     }
-    const enabled = (): boolean => deps.env().PAYMENT_EXECUTION_ENABLED === "true";
+    const enabled = (): boolean => killSwitchValue(deps) === "true";
     if (!enabled()) {
       return (await cancelUnsigned(pool, p.id, "EXECUTION_DISABLED", CANCEL_MESSAGES.EXECUTION_DISABLED ?? "", GUARD_ACTOR)) ?? (await getPayment(pool, p.id));
     }

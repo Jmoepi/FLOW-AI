@@ -12,6 +12,11 @@ export async function getBusiness(q: Queryable, id: string): Promise<BusinessRow
   return runOne<BusinessRow>(q, "SELECT id, name, country_code, timezone FROM businesses WHERE id = $1", [uuid(id)]);
 }
 
+/** Ids of all businesses (bounded). Used by the audit chain verify job when no business is pinned. */
+export async function listBusinessIds(q: Queryable): Promise<string[]> {
+  const rows = await run<{ id: string }>(q, "SELECT id FROM businesses ORDER BY created_at, id LIMIT 1000");
+  return rows.map((r) => r.id);
+}
 export async function getWallet(q: Queryable, id: string): Promise<WalletRow | null> {
   return runOne<WalletRow>(
     q,
