@@ -14,6 +14,10 @@ export interface GuardLaunchOptions {
   businessId?: string;
   port: number;
   treasuryLabel: string;
+  /** Kill switch value for the child. Defaults to true (m3-e2e); pass false for a smoke test that must not pay. */
+  executionEnabled?: boolean;
+  /** Fixed bearer token (dev only, read from a gitignored file). Random per launch when omitted. */
+  token?: string;
 }
 
 export interface GuardHandle {
@@ -32,9 +36,13 @@ export function baseGuardEnv(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   for (const k of ENV_ALLOWLIST) if (parent[k] !== undefined) env[k] = parent[k];
   return env;
 }
+/** Pure: the kill switch is "true" unless the caller passes executionEnabled: false. */
+export function killSwitchValue(opts: Pick<GuardLaunchOptions, "executionEnabled">): "true" | "false" {
+  return opts.executionEnabled === false ? "false" : "true";
+}
 export function startGuard(opts: GuardLaunchOptions): GuardHandle {
   const cfg = loadConfig(); // fails closed unless Testnet
-  const token = randomBytes(32).toString("hex");
+  const token = opts.token ?? randomBytes(32).toString("hex");
   // Allowlist, not a copy of process.env: the guard never sees an admin database credential, a Supabase service key or a provider key.
   const env = baseGuardEnv(process.env);
   Object.assign(env, {
@@ -46,7 +54,7 @@ export function startGuard(opts: GuardLaunchOptions): GuardHandle {
     AGENT_TO_PAYMENT_GUARD_TOKEN: token,
     GUARD_PORT: String(opts.port),
     GUARD_HOST: "127.0.0.1",
-    PAYMENT_EXECUTION_ENABLED: "true",
+    PAYMENT_EXECUTION_ENABLED: killSwitchValue(opts),
     XRPL_DEMO_SIGNER_SEED: loadGuardSignerSeed(opts.treasuryLabel),
   });
   if (opts.businessId !== undefined) env.GUARD_BUSINESS_ID = opts.businessId;
