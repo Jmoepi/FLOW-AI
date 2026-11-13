@@ -187,7 +187,13 @@ async function run(gw: XrplGateway, args: Args, cfg: ReturnType<typeof loadConfi
     }
     const outcome = await submitAndWait(
       gw,
-      { hash: signedEv.hash, txBlob: signedEv.txBlob, lastLedgerSequence: signedEv.lastLedgerSequence, amount },
+      {
+        hash: signedEv.hash,
+        txBlob: signedEv.txBlob,
+        lastLedgerSequence: signedEv.lastLedgerSequence,
+        firstLedgerSequence: typeof signedEv.firstLedgerSequence === "number" ? signedEv.firstLedgerSequence : undefined,
+        amount,
+      },
       { onEvent: (e) => logEvent(args.resume!, false, e) },
     );
     console.log(describe(outcome));
@@ -250,6 +256,7 @@ async function run(gw: XrplGateway, args: Args, cfg: ReturnType<typeof loadConfi
         type: "signed",
         hash: s.hash,
         lastLedgerSequence: s.lastLedgerSequence,
+        firstLedgerSequence: s.firstLedgerSequence,
         sequence: s.sequence,
         feeDrops: s.feeDrops,
         amount: s.amount,

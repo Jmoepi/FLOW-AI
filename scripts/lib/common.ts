@@ -120,6 +120,16 @@ export function loadSigningWallet(label: string): Wallet {
   return wallet;
 }
 
+/**
+ * Launcher-only accessor (scripts/lib/guard-launcher.ts): returns the seed so it can be placed in a child process
+ * environment IN MEMORY. The caller must never print, log, write or pass it on argv.
+ */
+export function loadGuardSignerSeed(label: string): string {
+  const entry = parseWalletsFile(readRaw()).wallets.find((w) => w.label === label);
+  if (!entry) throw new Error(`No wallet labelled ${JSON.stringify(label)} in the secrets file.`);
+  if (Wallet.fromSeed(entry.seed).address !== entry.address) throw new Error(`Wallet ${label}: seed does not match its recorded address`);
+  return entry.seed;
+}
 /** Redacted one-line description of anything thrown (never a stack). */
 export function toErrorMessage(err: unknown): string {
   return redactError(err);

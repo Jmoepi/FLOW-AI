@@ -68,8 +68,17 @@ export interface NetworkInfo {
   validatedLedgerIndex: number;
 }
 
+export interface LedgerRange {
+  minLedger: number;
+  maxLedger: number;
+}
+
 export type TxLookup =
-  | { status: "not_found" }
+  | {
+      status: "not_found";
+      /** True only when the server confirmed it searched every ledger in the requested range (rippled `searched_all`). */
+      searchedAll?: boolean | undefined;
+    }
   | {
       status: "found";
       validated: boolean;
@@ -92,7 +101,61 @@ export interface LedgerGateway {
   getValidatedLedgerIndex(): Promise<number>;
   autofill(tx: Payment): Promise<Payment>;
   submitBlob(txBlob: string): Promise<SubmitAck>;
-  lookupTx(hash: string): Promise<TxLookup>;
+  lookupTx(hash: string, range?: LedgerRange): Promise<TxLookup>;
+}
+
+export interface AccountSnapshot {
+  /** XRP balance in drops, as a decimal string. */
+  xrpDrops: string;
+  ownerCount: number;
+  /** RLUSD balance on the trust line to the issuer, or null when there is none. */
+  rlusdBalance: string | null;
+  /** Validated ledger the snapshot was read from. */
+  ledgerIndex: number;
+}
+
+export interface Reserves {
+  baseReserveDrops: string;
+  ownerReserveDrops: string;
+}
+
+export type TrustLineState = "present" | "absent" | "unknown";
+
+/** Inclusive ledger ranges the server holds, from server_info.complete_ledgers. */
+export type CompleteLedgers = LedgerRange[];
+
+/** Extra reads the payment guard needs. Kept separate so existing LedgerGateway mocks keep compiling. */
+export interface GuardLedgerGateway extends LedgerGateway {
+  getAccountSnapshot(account: string, issuer: string, currencyHex: string): Promise<AccountSnapshot>;
+  getReserves(): Promise<Reserves>;
+  getDestinationTrustLine(destination: string, issuer: string, currencyHex: string): Promise<TrustLineState>;
+  getCompleteLedgers(): Promise<CompleteLedgers>;
+}
+
+export function isGuardLedgerGateway(gw: LedgerGateway): gw is GuardLedgerGateway {
+  return typeof (gw as Partial<GuardLedgerGateway>).getCompleteLedgers === "function";
+}
+
+/** Parses "100-200,205,300-400" (or "empty") into ranges. Malformed input yields no ranges (fail closed). */
+export function parseCompleteLedgers(value: string | undefined): CompleteLedgers {
+  if (typeof value !== "string") return [];
+  const out: CompleteLedgers = [];
+  for (const part of value.split(",")) {
+    const text = part.trim();
+    if (text === "empty") continue;
+    const bounds = text.split("-");
+    if (bounds.length > 2 || !bounds.every((b) => /^\d{1,15}$/.test(b))) return [];
+    const lo = Number(bounds[0]);
+    const hi = Number(bounds[bounds.length - 1]);
+    if (hi < lo) return [];
+    out.push({ minLedger: lo, maxLedger: hi });
+  }
+  return out;
+}
+
+/** True when ONE contiguous range covers every ledger in [minLedger, maxLedger]. */
+export function rangesCover(ranges: CompleteLedgers, minLedger: number, maxLedger: number): boolean {
+  return ranges.some((r) => r.minLedger <= minLedger && r.maxLedger >= maxLedger);
 }
 
 export interface GatewayOptions {
@@ -110,7 +173,7 @@ function errorCode(err: unknown): string | undefined {
 }
 
 /** Thin wrapper over xrpl.js Client with timeouts, connect retries and reconnect-on-use. */
-export class XrplGateway implements LedgerGateway {
+export class XrplGateway implements GuardLedgerGateway {
   private constructor(
     private readonly client: Client,
     private readonly opts: Required<GatewayOptions>,
@@ -178,10 +241,13 @@ export class XrplGateway implements LedgerGateway {
     return { engineResult: r.engine_result, engineResultMessage: r.engine_result_message, accepted: r.accepted };
   }
 
-  async lookupTx(hash: string): Promise<TxLookup> {
+  async lookupTx(hash: string, range?: LedgerRange): Promise<TxLookup> {
     await this.ensureConnected();
     try {
-      const r = (await this.client.request({ command: "tx", transaction: hash })).result as unknown as {
+      const req = range
+        ? { command: "tx" as const, transaction: hash, min_ledger: range.minLedger, max_ledger: range.maxLedger }
+        : { command: "tx" as const, transaction: hash };
+      const r = (await this.client.request(req)).result as unknown as {
         validated?: boolean;
         ledger_index?: number;
         meta?: { TransactionResult?: string; delivered_amount?: unknown; DeliveredAmount?: unknown } | string;
@@ -198,9 +264,50 @@ export class XrplGateway implements LedgerGateway {
         feeDrops: r.tx_json?.Fee ?? r.Fee,
       };
     } catch (err) {
-      if (errorCode(err) === "txnNotFound") return { status: "not_found" };
+      if (errorCode(err) === "txnNotFound") {
+        const searched = (err as { data?: { searched_all?: unknown } }).data?.searched_all;
+        return { status: "not_found", searchedAll: range !== undefined && searched === true };
+      }
       throw err;
     }
+  }
+
+  async getAccountSnapshot(account: string, issuer: string, currencyHex: string): Promise<AccountSnapshot> {
+    await this.ensureConnected();
+    const info = (await this.client.request({ command: "account_info", account, ledger_index: "validated" })).result;
+    const data = info.account_data;
+    const rlusdBalance = await this.getIssuedBalance(account, issuer, currencyHex);
+    return {
+      xrpDrops: String(data.Balance),
+      ownerCount: Number(data.OwnerCount),
+      rlusdBalance,
+      ledgerIndex: Number(info.ledger_index),
+    };
+  }
+
+  async getReserves(): Promise<Reserves> {
+    await this.ensureConnected();
+    const state = (await this.client.request({ command: "server_state" })).result.state as unknown as {
+      validated_ledger?: { reserve_base?: number; reserve_inc?: number };
+    };
+    const base = state.validated_ledger?.reserve_base;
+    const inc = state.validated_ledger?.reserve_inc;
+    if (!Number.isSafeInteger(base) || !Number.isSafeInteger(inc)) throw new Error("server_state did not report reserves");
+    return { baseReserveDrops: String(base), ownerReserveDrops: String(inc) };
+  }
+
+  async getDestinationTrustLine(destination: string, issuer: string, currencyHex: string): Promise<TrustLineState> {
+    try {
+      return (await this.getIssuedBalance(destination, issuer, currencyHex)) === null ? "absent" : "present";
+    } catch (err) {
+      return errorCode(err) === "actNotFound" ? "absent" : "unknown";
+    }
+  }
+
+  async getCompleteLedgers(): Promise<CompleteLedgers> {
+    await this.ensureConnected();
+    const info = (await this.client.request({ command: "server_info" })).result.info;
+    return parseCompleteLedgers(info.complete_ledgers);
   }
 
   /**

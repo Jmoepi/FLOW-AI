@@ -57,7 +57,7 @@ class FakeGateway implements LedgerGateway {
     if (this.submitThrows) throw new Error("socket closed");
     return { engineResult: "tesSUCCESS" };
   }
-  async lookupTx(hash: string): Promise<TxLookup> {
+  async lookupTx(hash: string, _range?: { minLedger: number; maxLedger: number }): Promise<TxLookup> {
     const n = (this.lookups.get(hash) ?? 0) + 1;
     this.lookups.set(hash, n);
     return this.behavior(hash, n);
@@ -219,6 +219,7 @@ describe("payment flow outcomes", () => {
 
   it("validated ledger passes LastLedgerSequence without the tx -> failed_expired", async () => {
     const gw = new FakeGateway();
+    gw.behavior = () => ({ status: "not_found", searchedAll: true });
     gw.step = 5; // ledgers close while we poll
     const res = await send(gw);
     expect(res.outcome?.kind).toBe("failed_expired");
@@ -297,6 +298,7 @@ describe("idempotency and reconciliation", () => {
 
   it("a blob whose window is over and which is not on ledger is NOT resubmitted", async () => {
     const gw = new FakeGateway();
+    gw.behavior = () => ({ status: "not_found", searchedAll: true });
     gw.validated = 1021;
     const out = await submitAndWait(gw, { ...ref, txBlob: "BLOB", amount: expected }, fastWait());
     expect(out.kind).toBe("failed_expired");
@@ -330,10 +332,81 @@ describe("idempotency and reconciliation", () => {
 
   it("reconcilePayment: pending vs expired boundary is strictly greater than LastLedgerSequence", async () => {
     const gw = new FakeGateway();
+    gw.behavior = () => ({ status: "not_found", searchedAll: true });
     gw.validated = 1020; // equal to LLS: could still validate in ledger 1020? Not yet definitive
     expect((await reconcilePayment(gw, ref, expected)).kind).toBe("pending");
     gw.validated = 1021;
     expect((await reconcilePayment(gw, ref, expected)).kind).toBe("failed_expired");
+  });
+
+  it("F-19: past LastLedgerSequence but history not proven complete -> pending, never failed_expired", async () => {
+    const gw = new FakeGateway();
+    gw.validated = 1500;
+    for (const behavior of [(): TxLookup => ({ status: "not_found" }), (): TxLookup => ({ status: "not_found", searchedAll: false })]) {
+      gw.behavior = behavior;
+      const out = await reconcilePayment(gw, { ...ref, firstLedgerSequence: 1000 }, expected);
+      expect(out.kind).toBe("pending");
+      if (out.kind === "pending") expect(out.reason).toMatch(/history incomplete/);
+    }
+  });
+
+  it("F-19: the search range [first, validated] is passed to lookupTx", async () => {
+    const gw = new FakeGateway();
+    gw.validated = 1030;
+    const seen: unknown[] = [];
+    gw.lookupTx = async (_h, range) => {
+      seen.push(range);
+      return { status: "not_found", searchedAll: true };
+    };
+    await reconcilePayment(gw, { ...ref, firstLedgerSequence: 1000 }, expected);
+    await reconcilePayment(gw, ref, expected);
+    expect(seen).toEqual([{ minLedger: 1000, maxLedger: 1030 }, undefined]);
+  });
+
+  describe("complete_ledgers coverage", () => {
+    class GuardFake extends FakeGateway {
+      ranges: { minLedger: number; maxLedger: number }[] = [];
+      failRanges = false;
+      async getCompleteLedgers() {
+        if (this.failRanges) throw new Error("boom");
+        return this.ranges;
+      }
+    }
+    const lookup = (): TxLookup => ({ status: "not_found" });
+    const guarded = (ranges: { minLedger: number; maxLedger: number }[]) => {
+      const gw = new GuardFake();
+      gw.behavior = lookup;
+      gw.validated = 1500;
+      gw.ranges = ranges;
+      return gw;
+    };
+    const r = { ...ref, firstLedgerSequence: 1000 };
+
+    it("full coverage of [first, LLS+1] proves expiry", async () => {
+      const out = await reconcilePayment(guarded([{ minLedger: 1, maxLedger: 2000 }]), r, expected);
+      expect(out.kind).toBe("failed_expired");
+    });
+
+    it("exact boundary [first, LLS+1] is enough; one ledger short is not", async () => {
+      expect((await reconcilePayment(guarded([{ minLedger: 1000, maxLedger: 1021 }]), r, expected)).kind).toBe("failed_expired");
+      expect((await reconcilePayment(guarded([{ minLedger: 1000, maxLedger: 1020 }]), r, expected)).kind).toBe("pending");
+      expect((await reconcilePayment(guarded([{ minLedger: 1001, maxLedger: 2000 }]), r, expected)).kind).toBe("pending");
+    });
+
+    it("a gap in the ranges stays pending", async () => {
+      const gap = [
+        { minLedger: 1, maxLedger: 1010 },
+        { minLedger: 1012, maxLedger: 2000 },
+      ];
+      expect((await reconcilePayment(guarded(gap), r, expected)).kind).toBe("pending");
+    });
+
+    it("no firstLedgerSequence or a failing complete_ledgers call stays pending", async () => {
+      expect((await reconcilePayment(guarded([{ minLedger: 1, maxLedger: 2000 }]), ref, expected)).kind).toBe("pending");
+      const gw = guarded([{ minLedger: 1, maxLedger: 2000 }]);
+      gw.failRanges = true;
+      expect((await reconcilePayment(gw, r, expected)).kind).toBe("pending");
+    });
   });
 });
 
