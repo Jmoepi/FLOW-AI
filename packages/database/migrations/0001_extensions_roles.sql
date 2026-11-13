@@ -9,7 +9,12 @@ BEGIN
     CREATE ROLE flow_guard LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
   END IF;
   -- Re-assert the safe attributes on every run (a manual ALTER ROLE must not stay in effect).
-  ALTER ROLE flow_guard NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
+  ALTER ROLE flow_guard NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
+  -- NOSUPERUSER is not part of the ALTER above: hosted Postgres (Supabase) admins are not superusers and may not name it.
+  -- A role created above is already NOSUPERUSER; this undoes a manual escalation and fails loudly if it cannot.
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'flow_guard' AND rolsuper) THEN
+    ALTER ROLE flow_guard NOSUPERUSER;
+  END IF;
 END
 $$;
 

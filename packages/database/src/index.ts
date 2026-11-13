@@ -7,5 +7,8 @@ export * from "./repos";
 export * from "./local";
 export * from "./native";
 export * from "./migrate";
+export * from "./tls";
+export * from "./supabase-checks";
 export * from "./seed";
 export type { Pool, PoolClient } from "pg";
+export { Client } from "pg";

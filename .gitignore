@@ -39,3 +39,7 @@ npm-debug.log*
 # Local workflow artifacts and reference PDFs
 .agents/
 *.pdf
+
+# Certificates belong in .secrets/, not the repo root
+/*.crt
+/*.cer

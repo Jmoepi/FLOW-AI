@@ -18,14 +18,24 @@ export class MigrationConfigError extends Error {
   }
 }
 
+/**
+ * Checksums of earlier revisions of a migration that are accepted as "already applied". 0001 and 0006 originally named
+ * NOSUPERUSER in an ALTER ROLE, which hosted Postgres (Supabase, non-superuser admin) rejects; the new text is equivalent
+ * on a superuser database, so databases migrated with the old text stay valid and nothing is re-run.
+ */
+const SUPERSEDED_CHECKSUMS: Readonly<Record<string, readonly string[]>> = {
+  "0001": ["b473eb6b9d1c54141cf8d34106d8d2ca7287634c557cc04ff5cfbc77fe6313c4"],
+  "0006": ["0e08be4b26b3db4227201de4098319e181da2ddda272fda3cb1d0195006c7640"],
+};
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const SECURE_SSLMODES = new Set(["require", "verify-ca", "verify-full"]);
 
 /**
  * Refuses to migrate anything but a local database unless `allowRemote` is set. A remote target must additionally use
- * TLS (sslmode require, verify-ca or verify-full). Errors never echo the URL (it carries the password).
+ * TLS (sslmode require, verify-ca or verify-full, or a verified CA file). Errors never echo the URL (it carries the password).
  */
-export function assertMigrationTarget(databaseUrl: string | undefined, allowRemote: boolean): void {
+export function assertMigrationTarget(databaseUrl: string | undefined, allowRemote: boolean, hasVerifiedCa = false): void {
   if (databaseUrl === undefined || databaseUrl === "") throw new MigrationConfigError("DATABASE_URL is not set");
   let url: URL;
   try {
@@ -39,6 +49,7 @@ export function assertMigrationTarget(databaseUrl: string | undefined, allowRemo
   if (!allowRemote) {
     throw new MigrationConfigError("Refusing to migrate a non-local database. Re-run with --allow-remote if this is intended.");
   }
+  if (hasVerifiedCa) return; // DATABASE_SSL_CA_FILE: the connection is built with verified TLS regardless of sslmode
   const sslmode = url.searchParams.get("sslmode");
   if (sslmode === null || !SECURE_SSLMODES.has(sslmode)) {
     throw new MigrationConfigError("A remote database requires sslmode=require, verify-ca or verify-full in DATABASE_URL.");
@@ -143,7 +154,7 @@ export async function migrate(client: pg.Client, options: MigrateOptions = {}): 
     for (const f of files) {
       const existing = appliedMap.get(f.version);
       if (existing !== undefined) {
-        if (existing !== f.checksum) throw new MigrationConfigError(`Migration ${f.name} was changed after it was applied. Add a new migration instead.`);
+        if (existing !== f.checksum && !(SUPERSEDED_CHECKSUMS[f.version]?.includes(existing) ?? false)) throw new MigrationConfigError(`Migration ${f.name} was changed after it was applied. Add a new migration instead.`);
         report.skipped.push(f.name);
         continue;
       }

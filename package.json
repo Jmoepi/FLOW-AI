@@ -27,6 +27,8 @@
     "db:status:native": "tsx scripts/db-native.ts status",
     "db:reset:native": "tsx scripts/db-native.ts reset",
     "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:supabase:roles": "tsx scripts/supabase-roles.ts",
+    "db:supabase:verify": "tsx scripts/supabase-verify.ts",
     "guard:dev": "tsx scripts/guard-dev.ts",
     "agent:run": "tsx scripts/agent-run.ts",
     "agent:demo": "tsx scripts/agent-demo.ts",

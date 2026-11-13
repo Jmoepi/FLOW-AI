@@ -1,7 +1,7 @@
 /**
  * Applies SQL migrations. Usage: pnpm db:migrate [up|status] [--local] [--allow-remote]
  * Target: DATABASE_URL, or the local Docker database (.secrets/local-db.env) when DATABASE_URL is unset or --local is given.
- * A non-local host needs --allow-remote and TLS. The connection string is never printed.
+ * A non-local host needs --allow-remote and TLS (optional DATABASE_SSL_CA_FILE = verified TLS against that CA). The connection string is never printed.
  */
 import { redactError } from "../packages/contracts/src/index";
 import {
@@ -11,6 +11,8 @@ import {
   parseMigrateArgs,
   type PgClientConfig,
   runMigrations,
+  connectionConfigWithCa,
+  sslCaFileFromEnv,
 } from "../packages/database/src/index";
 import { SECRETS_DIR } from "./lib/common";
 
@@ -23,8 +25,9 @@ async function main(): Promise<void> {
     if (secrets === null) throw new Error("No local database set up. Run: pnpm db:up (or set DATABASE_URL)");
     config = localAdminConfig(secrets);
   } else {
-    assertMigrationTarget(url, args.allowRemote);
-    config = { connectionString: url };
+    const caFile = sslCaFileFromEnv(process.env);
+    assertMigrationTarget(url, args.allowRemote, caFile !== undefined);
+    config = caFile !== undefined ? connectionConfigWithCa(url, caFile) : { connectionString: url };
   }
   const report = await runMigrations(config, { dryRun: args.command === "status", log: (l) => console.log(l) });
   if (args.command === "status") {
