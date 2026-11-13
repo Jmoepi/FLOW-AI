@@ -70,6 +70,17 @@ export async function getInvoice(q: Queryable, id: string): Promise<InvoiceRow |
   return r ? mapInvoice(r) : null;
 }
 
+/** Open invoices of one business, earliest due date first (bounded). Read-only; used for the agent's read views. */
+export async function listOpenInvoicesForBusiness(q: Queryable, businessId: string, limit: number): Promise<InvoiceRow[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new DbError("INVALID_INPUT");
+  const rows = await run<InvoiceDbRow>(
+    q,
+    `SELECT ${INVOICE_COLS} FROM invoices WHERE business_id = $1 AND status = 'open' ORDER BY due_date, amount, invoice_number, id LIMIT $2`,
+    [uuid(businessId), limit],
+  );
+  return rows.map(mapInvoice);
+}
+
 /** Guard-side invoice status update (column-level grant: status, updated_at only). */
 export async function setInvoiceStatus(q: Queryable, id: string, status: InvoiceStatus): Promise<void> {
   if (!INVOICE_STATUSES.includes(status)) throw new DbError("INVALID_INPUT");

@@ -1,4 +1,5 @@
 import { lockStaleUnsignedPayments, withTransaction } from "@flow-ai/database";
+import { sweepStaleAgentRuns } from "../services/agent-runs";
 import { cancelUnsignedIn, SYSTEM_ACTOR } from "../services/apply-outcome";
 import type { ServiceDeps } from "../services/payments";
 import { createLoop, type Loop } from "./loop";
@@ -22,5 +23,5 @@ export async function sweepStaleReservations(deps: ServiceDeps): Promise<number>
 
 export function createSweeper(deps: ServiceDeps): Loop {
   const everyMs = Math.min(60, Math.max(10, Math.floor(deps.config.staleReservationTimeoutSeconds / 4))) * 1000;
-  return createLoop("sweeper", everyMs, () => sweepStaleReservations(deps), deps.logger);
+  return createLoop("sweeper", everyMs, async () => [await sweepStaleReservations(deps), await sweepStaleAgentRuns(deps)], deps.logger);
 }

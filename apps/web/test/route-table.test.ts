@@ -17,9 +17,9 @@ describe("route table (AZ-1)", () => {
       if (r.method !== "GET" && r.role !== "public") expect(r.csrf).toBe("token");
     }
   });
-  it("only login is public, and the policy, supplier, audit and overview routes are owner-only", () => {
+  it("only login is public, and the policy, supplier, audit, agent and overview routes are owner-only", () => {
     expect(routeList.filter((r) => r.role === "public").map((r) => r.path)).toEqual(["/api/auth/login"]);
-    for (const r of [routes.policyGet, routes.policyPut, routes.suppliersList, routes.supplierPatch, routes.auditList, routes.overview]) expect(r.role).toBe("owner");
+    for (const r of [routes.policyGet, routes.policyPut, routes.suppliersList, routes.supplierPatch, routes.auditList, routes.agentRunsList, routes.overview]) expect(r.role).toBe("owner");
     expect(routes.session.role).toBe("member");
     expect(routes.logout.role).toBe("member");
   });

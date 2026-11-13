@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { NetworkBadge } from "./Badge";
 import { LogoutButton } from "./LogoutButton";
-export type NavKey = "overview" | "suppliers" | "policy" | "audit";
+export type NavKey = "overview" | "suppliers" | "policy" | "agent" | "audit";
 const NAV: { key: NavKey; href: string; label: string }[] = [
   { key: "overview", href: "/", label: "Overview" },
   { key: "suppliers", href: "/suppliers", label: "Suppliers" },
   { key: "policy", href: "/policy", label: "Payment policies" },
+  { key: "agent", href: "/agent", label: "Agent activity" },
   { key: "audit", href: "/audit", label: "Audit" },
 ];
 function SkipLink(): ReactNode {

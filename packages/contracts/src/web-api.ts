@@ -82,6 +82,11 @@ export const AuditQuerySchema = z.strictObject({
   before_seq: digits(15).pipe(z.number().int().min(1)).optional(),
 });
 export type AuditQuery = z.infer<typeof AuditQuerySchema>;
+export const AgentRunsQuerySchema = z.strictObject({
+  limit: digits(2).pipe(z.number().int().min(1).max(50)).optional(),
+  before_seq: digits(15).pipe(z.number().int().min(1)).optional(),
+});
+export type AgentRunsQuery = z.infer<typeof AgentRunsQuerySchema>;
 export const IdParamsSchema = z.strictObject({ id: z.uuid() });
 // ---------------------------------------------------------------------------------------------------------------------
 // Policy diff

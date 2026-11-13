@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, assertLeastPrivilegeRole, loadConfig } from "../src/config";
+import { AGENT_PAYMENT_WAIT_SECONDS, AGENT_RUN_STALE_MIN_SECONDS, ConfigError, assertLeastPrivilegeRole, loadConfig } from "../src/config";
 import { TOKEN, TOKEN_NEXT, validEnv } from "./helpers";
 const fields = (env: NodeJS.ProcessEnv): string[] => {
   try {
@@ -13,7 +13,7 @@ const fields = (env: NodeJS.ProcessEnv): string[] => {
 describe("loadConfig fails closed", () => {
   it("accepts a valid environment and applies defaults", () => {
     const c = loadConfig(validEnv());
-    expect(c).toMatchObject({ host: "127.0.0.1", port: 4002, staleReservationTimeoutSeconds: 300, balancePollIntervalSeconds: 30, reconcileIntervalSeconds: 15, rateLimitPerMinute: 30 });
+    expect(c).toMatchObject({ host: "127.0.0.1", port: 4002, staleReservationTimeoutSeconds: 300, agentRunStaleSeconds: 180, balancePollIntervalSeconds: 30, reconcileIntervalSeconds: 15, rateLimitPerMinute: 30 });
     expect(c.tokens).toEqual([TOKEN]);
   });
   it("does not parse the kill switch or read the signer seed", () => {
@@ -36,10 +36,18 @@ describe("loadConfig fails closed", () => {
     ["bad port", { GUARD_PORT: "70000" }, "GUARD_PORT"],
     ["non-numeric port", { GUARD_PORT: "80a" }, "GUARD_PORT"],
     ["stale timeout below bound", { STALE_RESERVATION_TIMEOUT_SECONDS: "5" }, "STALE_RESERVATION_TIMEOUT_SECONDS"],
+    ["agent run stale timeout below bound", { AGENT_RUN_STALE_SECONDS: "5" }, "AGENT_RUN_STALE_SECONDS"],
+    ["agent run stale timeout at the payment wait (55 s)", { AGENT_RUN_STALE_SECONDS: "55" }, "AGENT_RUN_STALE_SECONDS"],
+    ["agent run stale timeout just under the 120 s floor", { AGENT_RUN_STALE_SECONDS: "119" }, "AGENT_RUN_STALE_SECONDS"],
     ["poll interval above bound", { BALANCE_POLL_INTERVAL_SECONDS: "601" }, "BALANCE_POLL_INTERVAL_SECONDS"],
     ["bad business id", { GUARD_BUSINESS_ID: "not-a-uuid" }, "GUARD_BUSINESS_ID"],
   ])("refuses %s", (_name, over, field) => {
     expect(fields(validEnv(over))).toContain(field);
+  });
+  it("keeps the agent run stale floor strictly above the 55 s payment wait plus margin", () => {
+    expect(AGENT_RUN_STALE_MIN_SECONDS).toBeGreaterThanOrEqual(AGENT_PAYMENT_WAIT_SECONDS + 60);
+    expect(loadConfig(validEnv({ AGENT_RUN_STALE_SECONDS: String(AGENT_RUN_STALE_MIN_SECONDS) })).agentRunStaleSeconds).toBe(120);
+    expect(loadConfig(validEnv({})).agentRunStaleSeconds).toBe(180);
   });
   it("accepts a rotation token and a pinned business", () => {
     const c = loadConfig(validEnv({ AGENT_TO_PAYMENT_GUARD_TOKEN_NEXT: TOKEN_NEXT, GUARD_BUSINESS_ID: "3F2B8C1E-5D4A-4B6F-9A7E-1C2D3E4F5A6B" }));

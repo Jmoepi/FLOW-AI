@@ -4,3 +4,4 @@ export * from "./evaluation";
 export * from "./redact";
 export * from "./scan";
 export * from "./web-api";
+export * from "./agent";

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getPolicyForWeb, listSuppliersForBusiness } from "@flow-ai/database";
+import { appendAgentRunEvent, createAgentRun, getPolicyForWeb, listSuppliersForBusiness } from "@flow-ai/database";
 import { seedScenario, tableCounts } from "@flow-ai/database/testing";
 import { routes } from "../src/server/api/routes";
 import { MAX_BODY_BYTES } from "../src/server/http/route";
@@ -24,7 +24,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await h.close();
 });
-const ownerRoutes = [routes.policyGet, routes.policyPut, routes.suppliersList, routes.supplierPatch, routes.auditList, routes.overview];
+const ownerRoutes = [routes.policyGet, routes.policyPut, routes.suppliersList, routes.supplierPatch, routes.auditList, routes.agentRunsList, routes.overview];
 const authedRoutes = [...ownerRoutes, routes.session, routes.logout];
 describe("authentication and role checks (AZ-1, AZ-2)", () => {
   it("every non-public route answers 401 to an anonymous caller", async () => {
@@ -46,7 +46,7 @@ describe("authentication and role checks (AZ-1, AZ-2)", () => {
     expect((await h.authed(routes.session, viewerSession)).status).toBe(200);
   });
   it("owner reads succeed", async () => {
-    for (const r of [routes.policyGet, routes.suppliersList, routes.auditList, routes.overview]) {
+    for (const r of [routes.policyGet, routes.suppliersList, routes.auditList, routes.agentRunsList, routes.overview]) {
       const res = await h.authed(r, ownerSession);
       expect(res.status, r.path).toBe(200);
       expect(res.headers.get("cache-control")).toBe("no-store");
@@ -74,6 +74,19 @@ describe("tenant isolation (AZ-3)", () => {
     expect(list.raw).not.toContain(other.supplierId);
     const audit = await h.authed(routes.auditList, ownerSession);
     expect(audit.raw).not.toContain(other.businessId);
+  });
+  it("agent runs: the owner sees only their own business's runs, never another tenant's", async () => {
+    const other = await seedScenario(h.db.adminPool, { walletAddress: fakeAddress(), supplierAddress: fakeAddress(), issuer: ISSUER, currencyHex: CURRENCY_HEX });
+    const mine = await createAgentRun(h.db.adminPool, { business_id: h.scenario.businessId, trigger: "manual", mode: "deterministic" });
+    const theirs = await createAgentRun(h.db.adminPool, { business_id: other.businessId, trigger: "manual", mode: "deterministic" });
+    await appendAgentRunEvent(h.db.adminPool, theirs.id, other.businessId, { kind: "note" });
+    const res = await h.authed(routes.agentRunsList, ownerSession);
+    expect(res.status).toBe(200);
+    expect(res.raw).toContain(mine.id);
+    expect(res.raw).not.toContain(theirs.id);
+    expect(res.raw).not.toContain(other.businessId);
+    expect((await h.authed(routes.agentRunsList, ownerSession, { query: "?business_id=11111111-1111-4111-8111-111111111111" })).status).toBe(400);
+    expect((await h.authed(routes.agentRunsList, ownerSession, { query: "?limit=1000" })).status).toBe(400);
   });
   it("the business comes from the session: a body or query that names a business is rejected", async () => {
     const policy = await getPolicyForWeb(h.db.adminPool, h.scenario.businessId);

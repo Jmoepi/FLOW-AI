@@ -145,7 +145,9 @@ export async function auditEventTypes(admin: pg.Pool, paymentId: string): Promis
 export async function storedTextForLeakScan(admin: pg.Pool): Promise<string> {
   const r = await admin.query<{ t: string }>(
     `SELECT COALESCE(string_agg(row_to_json(a)::text, ' '), '') || ' ' ||
-            COALESCE((SELECT string_agg((to_jsonb(p) - 'signed_blob')::text, ' ') FROM payments p), '') AS t
+            COALESCE((SELECT string_agg((to_jsonb(p) - 'signed_blob')::text, ' ') FROM payments p), '') || ' ' ||
+            COALESCE((SELECT string_agg(to_jsonb(r)::text, ' ') FROM agent_runs r), '') || ' ' ||
+            COALESCE((SELECT string_agg(to_jsonb(e)::text, ' ') FROM agent_run_events e), '') AS t
        FROM audit_events a`,
   );
   return r.rows[0]?.t ?? "";
@@ -221,4 +223,53 @@ export async function tamperAuditRow(admin: pg.Pool, businessId: string, seq = 1
   } finally {
     c.release();
   }
+}
+
+// Agent run inspection (test-only; admin pool, bypasses RLS).
+export interface AgentRunTestRow {
+  id: string;
+  status: string;
+  client_status: string | null;
+  payment_id: string | null;
+  decision_code: string | null;
+  candidate_invoice_id: string | null;
+  agent_reason: string | null;
+  tool_call_count: number;
+}
+export async function agentRunRows(admin: pg.Pool, businessId: string): Promise<AgentRunTestRow[]> {
+  const r = await admin.query<AgentRunTestRow>(
+    "SELECT id, status, client_status, payment_id, decision_code, candidate_invoice_id, agent_reason, tool_call_count FROM agent_runs WHERE business_id = $1 ORDER BY seq",
+    [businessId],
+  );
+  return r.rows;
+}
+export async function agentRunDetail(admin: pg.Pool, runId: string): Promise<{ agent_reason: string | null; payment_id: string | null; decision_code: string | null }> {
+  const r = await admin.query<{ agent_reason: string | null; payment_id: string | null; decision_code: string | null }>("SELECT agent_reason, payment_id, decision_code FROM agent_runs WHERE id = $1", [runId]);
+  return r.rows[0] as { agent_reason: string | null; payment_id: string | null; decision_code: string | null };
+}
+export async function agentRunEventInputs(admin: pg.Pool, runId: string): Promise<Record<string, unknown>[]> {
+  const r = await admin.query<{ input: Record<string, unknown> }>("SELECT input FROM agent_run_events WHERE run_id = $1 ORDER BY seq", [runId]);
+  return r.rows.map((x) => x.input);
+}
+export async function auditRowsForEntity(admin: pg.Pool, entityId: string): Promise<{ actor_type: string; event_type: string; metadata: Record<string, unknown> }[]> {
+  const r = await admin.query<{ actor_type: string; event_type: string; metadata: Record<string, unknown> }>("SELECT actor_type, event_type, metadata FROM audit_events WHERE entity_id = $1 ORDER BY seq", [entityId]);
+  return r.rows;
+}
+/** Back-dates a running run's last activity so the sweeper sees it as stale. */
+export async function ageAgentRun(admin: pg.Pool, runId: string, seconds: number): Promise<void> {
+  await admin.query("UPDATE agent_runs SET last_activity_at = now() - make_interval(secs => $2) WHERE id = $1", [runId, seconds]);
+}
+/** Test-only: a running run for a business, inserted directly (admin pool). Returns its id. */
+export async function insertRunningAgentRun(admin: pg.Pool, businessId: string): Promise<string> {
+  const r = await admin.query<{ id: string }>("INSERT INTO agent_runs (business_id, status, trigger, mode) VALUES ($1,'running','manual','deterministic') RETURNING id", [businessId]);
+  return r.rows[0]?.id as string;
+}
+/** Test-only: status and client_status as stored. */
+export async function agentRunStatusPair(admin: pg.Pool, runId: string): Promise<{ status: string; client_status: string | null } | undefined> {
+  const r = await admin.query<{ status: string; client_status: string | null }>("SELECT status, client_status FROM agent_runs WHERE id = $1", [runId]);
+  return r.rows[0];
+}
+/** Test-only: tries to force a status on a run behind the guard's back; resolves with the SQLSTATE (or "ok"). */
+export async function forceAgentRunStatus(admin: pg.Pool, runId: string, status: string): Promise<string> {
+  return admin.query("UPDATE agent_runs SET status = $2, client_status = $2 WHERE id = $1", [runId, status]).then(() => "ok", (e: { code?: string }) => e.code ?? "unknown");
 }

@@ -1,4 +1,4 @@
-import type { AuditPage, OverviewData, PolicyData, RlusdPair, SupplierData } from "../src/components/types";
+import type { AgentRunsPage, AuditPage, OverviewData, PolicyData, RlusdPair, SupplierData } from "../src/components/types";
 export const PAIR: RlusdPair = { currency: "524C555344000000000000000000000000000000", issuer: "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV" };
 export const POLICY: PolicyData = {
   enabled: true,
@@ -38,4 +38,47 @@ export const AUDIT: AuditPage = {
     },
   ],
   next_before_seq: 7,
+};
+export const HASH = "A".repeat(64);
+export const AGENT_RUNS: AgentRunsPage = {
+  runs: [
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      seq: 5,
+      started_at: "2026-01-15T10:00:00.000Z",
+      completed_at: "2026-01-15T10:00:09.000Z",
+      status: "paid",
+      trigger: "manual",
+      mode: "deterministic",
+      effective_mode: "deterministic",
+      summary: "Paid",
+      tool_call_count: 4,
+      decision_code: "ALLOWED",
+      agent_reason: "Deterministic rule: earliest due date (2026-02-01) among 2 eligible invoices, amount 1 RLUSD. The payment guard decides.",
+      invoice_number: "INV-1",
+      payment: { id: "22222222-2222-4222-8222-222222222222", status: "validated", tx_hash: HASH, explorer_url: `https://testnet.xrpl.org/transactions/${HASH}` },
+      events: [
+        { seq: 1, kind: "tool_call", tool_name: "get_business_snapshot", ok: true, error_code: null, duration_ms: 12, input: {}, output: {} },
+        { seq: 2, kind: "decision", tool_name: null, ok: true, error_code: null, duration_ms: null, input: null, output: null },
+      ],
+    },
+    {
+      id: "33333333-3333-4333-8333-333333333333",
+      seq: 4,
+      started_at: "2026-01-14T10:00:00.000Z",
+      completed_at: "2026-01-14T10:00:05.000Z",
+      status: "blocked",
+      trigger: "interval",
+      mode: "llm",
+      effective_mode: "deterministic",
+      summary: "Blocked",
+      tool_call_count: 3,
+      decision_code: "SUPPLIER_NOT_APPROVED",
+      agent_reason: null,
+      invoice_number: null,
+      payment: null,
+      events: [],
+    },
+  ],
+  next_before_seq: 4,
 };

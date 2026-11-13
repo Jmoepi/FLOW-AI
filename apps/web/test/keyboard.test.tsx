@@ -222,3 +222,19 @@ describe("keyboard-only journeys", () => {
     expect(link.getAttribute("href")).toBe("/login?reauth=1");
   });
 });
+describe("keyboard: agent activity", () => {
+  it("the load-older link is reachable by Tab and is a plain link", async () => {
+    const { AgentActivityView } = await import("../src/components/AgentActivityView");
+    const { AGENT_RUNS } = await import("./ui-fixtures");
+    const user = userEvent.setup();
+    render(
+      <Shell businessName="Acme" current="agent">
+        <AgentActivityView page={AGENT_RUNS} timezone="UTC" />
+      </Shell>,
+    );
+    const older = screen.getByRole("link", { name: "Load older runs" });
+    for (let i = 0; i < 30 && document.activeElement !== older; i++) await user.tab();
+    expect(document.activeElement).toBe(older);
+    expect(older.getAttribute("href")).toBe("/agent?before_seq=4");
+  });
+});

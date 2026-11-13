@@ -48,6 +48,37 @@ export interface AuditPage {
   events: AuditEventData[];
   next_before_seq: number | null;
 }
+export interface AgentEventData {
+  seq: number;
+  kind: string;
+  tool_name: string | null;
+  ok: boolean | null;
+  error_code: string | null;
+  duration_ms: number | null;
+  input: unknown;
+  output: unknown;
+}
+export interface AgentRunData {
+  id: string;
+  seq: number;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  trigger: string;
+  mode: string;
+  effective_mode: string | null;
+  summary: string | null;
+  tool_call_count: number;
+  decision_code: string | null;
+  agent_reason: string | null;
+  invoice_number: string | null;
+  payment: { id: string; status: string | null; tx_hash: string | null; explorer_url: string | null } | null;
+  events: AgentEventData[];
+}
+export interface AgentRunsPage {
+  runs: AgentRunData[];
+  next_before_seq: number | null;
+}
 export interface RlusdPair {
   currency: string;
   issuer: string;

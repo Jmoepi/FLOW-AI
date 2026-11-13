@@ -163,11 +163,11 @@ describe("least privilege", () => {
       ["UPDATE web_sessions SET absolute_expires_at = now()", "session expiry"],
     ];
     for (const [sql, label] of cases) expect(await state(id, sql), label).toBe("42501");
-    for (const t of ["payments", "daily_spend_reservations", "treasury_wallets", "invoices", "suppliers", "treasury_policies", "businesses", "business_members", "agent_runs", "audit_events", "balance_snapshots"]) {
+    for (const t of ["payments", "daily_spend_reservations", "treasury_wallets", "invoices", "suppliers", "treasury_policies", "businesses", "business_members", "agent_runs", "agent_run_events", "agent_run_payment_requests", "audit_events", "balance_snapshots"]) {
       expect(await state(id, `DELETE FROM ${t}`), `delete ${t}`).toBe("42501");
     }
     expect(await state(id, "INSERT INTO balance_snapshots (wallet_id, xrp_balance) VALUES (gen_random_uuid(), 1)")).toBe("42501");
-    expect(await state(id, "SELECT * FROM agent_runs")).toBe("42501");
+    for (const sql of ["INSERT INTO agent_runs (business_id, status, trigger, mode) VALUES (gen_random_uuid(), 'running', 'manual', 'deterministic')", "UPDATE agent_runs SET status = 'paid'", "UPDATE agent_run_events SET ok = true", "INSERT INTO agent_run_events (run_id, business_id, seq, kind) VALUES (gen_random_uuid(), gen_random_uuid(), 1, 'note')", "INSERT INTO agent_run_payment_requests (run_id, business_id, invoice_id, idempotency_key, observed_status) VALUES (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'abcdefgh12', 'blocked')", "UPDATE agent_runs SET client_status = 'paid'"]) expect(await state(id, sql), sql).toBe("42501");
     expect(await state(id, "SELECT * FROM schema_migrations")).toBe("42501");
   });
   it("cannot UPDATE, DELETE or TRUNCATE audit_events, but can append for its own business only", async () => {

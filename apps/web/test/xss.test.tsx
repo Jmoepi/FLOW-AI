@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { cleanup, render } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentActivityView } from "../src/components/AgentActivityView";
 import { AuditView } from "../src/components/AuditView";
 import { describeMetadata } from "../src/components/audit-format";
 import { OverviewView } from "../src/components/OverviewView";
 import { Shell } from "../src/components/Shell";
 import { SuppliersView } from "../src/components/SuppliersView";
-import { AUDIT, OVERVIEW, SUPPLIERS } from "./ui-fixtures";
+import { AGENT_RUNS, AUDIT, HASH, OVERVIEW, SUPPLIERS } from "./ui-fixtures";
 afterEach(cleanup);
 const HOSTILE = ['<img src=x onerror="alert(1)">', '"><script>alert(1)</script>', "javascript:alert(1)", "<svg onload=alert(1)>", "</td><td><b>x</b>"];
 // Elements that would exist only if hostile text had been parsed as markup.
@@ -63,5 +64,32 @@ describe("hostile text is rendered as text, never as markup", () => {
   it("source has no dangerouslySetInnerHTML (also enforced by eslint)", () => {
     const dir = join(process.cwd(), "src", "components");
     for (const f of fs.readdirSync(dir)) expect(fs.readFileSync(join(dir, f), "utf8")).not.toContain("dangerouslySetInnerHTML");
+  });
+});
+describe("agent activity renders agent text as text only", () => {
+  const REASON = "<img src=x onerror=alert(1)><script>x</script>[link](javascript:alert(1))";
+  const withRun = (patch: Partial<(typeof AGENT_RUNS.runs)[number]>) => ({ runs: [{ ...AGENT_RUNS.runs[0]!, ...patch }], next_before_seq: null });
+  it("agent_reason appears as text with no element created and no link besides the explorer", () => {
+    const { container } = render(<AgentActivityView page={withRun({ agent_reason: REASON })} timezone="UTC" />);
+    expect(container.querySelectorAll(INJECTED)).toHaveLength(0);
+    expect(container.querySelector("blockquote")?.textContent).toBe(REASON);
+    const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([`https://testnet.xrpl.org/transactions/${HASH}`]);
+    expect(container.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+  it.each(HOSTILE)("event fields and invoice number: %s", (evil) => {
+    const page = withRun({ invoice_number: evil, decision_code: evil, events: [{ ...AGENT_RUNS.runs[0]!.events[0]!, tool_name: evil, error_code: evil, kind: evil, ok: false }] });
+    const { container } = render(<AgentActivityView page={page} timezone="UTC" />);
+    expect(container.querySelectorAll(INJECTED)).toHaveLength(0);
+  });
+  it("no explorer link is rendered without a server-built URL", () => {
+    const run = AGENT_RUNS.runs[0]!;
+    const { container } = render(<AgentActivityView page={withRun({ payment: { ...run.payment!, explorer_url: null } })} timezone="UTC" />);
+    expect(container.querySelectorAll("a")).toHaveLength(0);
+  });
+  it("server-rendered HTML escapes the reason", () => {
+    const html = renderToString(<AgentActivityView page={withRun({ agent_reason: REASON })} timezone="UTC" />);
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });

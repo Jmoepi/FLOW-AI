@@ -9,6 +9,36 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 export const SECRETS_DIR = path.join(ROOT, ".secrets");
 export const NOT_REACHABLE_MESSAGE = `Postgres not reachable at ${LOCAL_DB.host}:${String(LOCAL_DB.port)}. Start Docker Desktop, then run: pnpm db:up`;
 
+/** Set by the vitest globalSetup; every throwaway database created in that run is tagged with it so teardown can drop them. */
+export const TEST_RUN_ENV = "FLOW_TEST_RUN_ID";
+const TEST_DB_NAME = /^flow_test_[0-9a-f]{12}$/;
+const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
+const runTag = (runId: string): string => `flow-test-run:${runId}`;
+/**
+ * Drops the throwaway databases that were created (and tagged) by ONE test run. Only databases whose name is exactly
+ * `flow_test_<12 hex>` AND whose comment carries this run's tag are touched; the dev database, `postgres` and anything
+ * else are never selected. Returns the dropped names. Safe to call when nothing was created.
+ */
+export async function dropTestDatabasesForRun(secrets: LocalDbSecrets, runId: string): Promise<string[]> {
+  if (!RUN_ID.test(runId)) throw new Error("invalid test run id");
+  const c = new pg.Client({ ...localAdminConfig(secrets, "postgres"), connectionTimeoutMillis: 3000 });
+  await c.connect();
+  const dropped: string[] = [];
+  try {
+    const found = await c.query<{ datname: string }>(
+      "SELECT datname FROM pg_database WHERE datname LIKE 'flow\\_test\\_%' AND shobj_description(oid, 'pg_database') = $1",
+      [runTag(runId)],
+    );
+    for (const { datname } of found.rows) {
+      if (!TEST_DB_NAME.test(datname)) continue;
+      await c.query(`DROP DATABASE IF EXISTS ${pg.escapeIdentifier(datname)} WITH (FORCE)`);
+      dropped.push(datname);
+    }
+  } finally {
+    await c.end();
+  }
+  return dropped;
+}
 export interface TestDatabase {
   /** Superuser pool on the throwaway database (bypasses RLS). Tests use it for setup and tamper checks only. */
   adminPool: pg.Pool;
@@ -62,6 +92,8 @@ async function createLocked(options: CreateTestDatabaseOptions, secrets: LocalDb
   }
   try {
     await maint.query(`CREATE DATABASE ${pg.escapeIdentifier(name)}`);
+    const runId = process.env[TEST_RUN_ENV];
+    if (runId !== undefined && RUN_ID.test(runId)) await maint.query(`COMMENT ON DATABASE ${pg.escapeIdentifier(name)} IS ${pg.escapeLiteral(runTag(runId))}`);
     await ensureGuardRole(maint, secrets.guardPassword);
     await ensureRole(maint, "flow_web", secrets.webPassword);
   } finally {

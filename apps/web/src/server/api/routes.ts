@@ -1,4 +1,5 @@
 import type { Route } from "../http/route";
+import { agentRunsListRoute } from "./agent-runs";
 import { auditListRoute } from "./audit";
 import { loginRoute, logoutRoute, sessionRoute } from "./auth";
 import { overviewRoute } from "./overview";
@@ -17,6 +18,7 @@ export const routes = {
   suppliersList: suppliersListRoute,
   supplierPatch: supplierPatchRoute,
   auditList: auditListRoute,
+  agentRunsList: agentRunsListRoute,
   overview: overviewRoute,
 } as const satisfies Record<string, Route>;
 export const routeList: readonly Route[] = Object.values(routes);

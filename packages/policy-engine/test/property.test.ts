@@ -14,6 +14,15 @@ function rng(seed: number): () => number {
   };
 }
 
+/**
+ * Determinism and speed: every random draw comes from the seeded PRNG above (no Math.random, no clock), the iteration
+ * count is fixed, and per-iteration verdicts are checked with plain comparisons whose first failing cases are reported
+ * once (tens of thousands of vitest expect() calls were part of what made this test slow in a parallel full run). The
+ * explicit timeout is generous so CPU contention in `pnpm test` cannot turn a slow machine into a false failure; it
+ * does not change what is proven.
+ */
+const ITERATIONS = 3000;
+const TIMEOUT_MS = 120_000;
 const UNIT = 1_000_000n; // micro-units: 6 decimals
 const toStr = (u: bigint): string => {
   const whole = u / UNIT;
@@ -34,7 +43,8 @@ describe("property: the engine never allows a breach (seeded)", () => {
       };
       let allowedCount = 0;
       let blockedCount = 0;
-      for (let i = 0; i < 3000; i++) {
+      const violations: string[] = [];
+      for (let i = 0; i < ITERATIONS; i++) {
         const cap = pick(500n * UNIT);
         const daily = pick(1000n * UNIT);
         const reserve = pick(600n * UNIT);
@@ -70,19 +80,18 @@ describe("property: the engine never allows a breach (seeded)", () => {
         const ok = amount > 0n && amount <= cap && spent + amount <= daily && amount <= balance && balance - amount >= reserve;
         if (d.allowed) {
           allowedCount++;
-          expect(amount > 0n).toBe(true);
-          expect(amount <= cap).toBe(true);
-          expect(spent + amount <= daily).toBe(true);
-          expect(balance - amount >= reserve).toBe(true);
+          // Safety: an allowed decision never breaches any limit.
+          if (!(amount > 0n && amount <= cap && spent + amount <= daily && balance - amount >= reserve)) violations.push(`breach at i=${String(i)}`);
         } else {
           blockedCount++;
         }
         // Completeness on the same facts: the engine agrees with the oracle exactly.
-        expect(d.allowed).toBe(ok);
+        if (d.allowed !== ok) violations.push(`oracle mismatch at i=${String(i)} (engine ${String(d.allowed)}, oracle ${String(ok)})`);
       }
+      expect(violations.slice(0, 5)).toEqual([]);
       expect(allowedCount).toBeGreaterThan(100);
       expect(blockedCount).toBeGreaterThan(100);
-    });
+    }, TIMEOUT_MS);
   }
 
   it("never allows when any non-money gate is closed, whatever the amounts", () => {
@@ -100,5 +109,5 @@ describe("property: the engine never allows a breach (seeded)", () => {
       const d = evaluatePolicy(make((r) => { r.invoice.amount = toStr(BigInt(1 + Math.floor(next() * 100)) * UNIT); gate(r); }));
       expect(d.allowed).toBe(false);
     }
-  });
+  }, TIMEOUT_MS);
 });
