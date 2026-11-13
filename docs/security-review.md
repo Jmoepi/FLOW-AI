@@ -115,3 +115,9 @@ Residual risks: scrypt instead of the platform's auth until M6 (AU-1 exception);
 | L-3 | Low | Launcher copied the whole parent environment into the guard. | Fixed. `baseGuardEnv` allowlists the variables node needs; everything else must be set explicitly. |
 | L-4 | Low | `GUARD_HOST` accepts any host; no TLS check. | Deferred to deployment (M6/M7). Partly addressed: a non-loopback host now forces `GUARD_BUSINESS_ID`. |
 | L-5 | Low | Demo timezone note, Windows `child.kill`, stale test count. | Fixed for the note (schema defaults are already ZA / Africa/Johannesburg) and the README count. The Windows `child.kill` behaviour is accepted for the local launcher. |
+
+## Residual risks and open Low items (before deployment or demo)
+- Compromise of the `flow_web` role is equivalent to owner compromise. The session tables are permissive by design until Supabase Auth replaces the local auth provider in M6.
+- Open Low: `login_attempts` rows are never pruned. Add a pruning job before deployment.
+- Open Low: a trusted-proxy setting is needed before deployment, otherwise all clients share one IP rate-limit bucket.
+- Open Low: a manual real-browser accessibility and CSP pass is needed before the demo. Current checks are automated jsdom tests only.
