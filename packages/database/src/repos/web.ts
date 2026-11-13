@@ -84,6 +84,16 @@ export async function createCredential(q: Queryable, c: { email: string; passwor
 export async function addBusinessMember(q: Queryable, m: { business_id: string; user_id: string; role: WebRole }): Promise<void> {
   await run(q, "INSERT INTO business_members (business_id, user_id, role) VALUES ($1, $2, $3)", [uuid(m.business_id), uuid(m.user_id), webRole(m.role)]);
 }
+/** Seed/setup only (admin pool): the id of the business with exactly this name, if any. */
+export async function findBusinessIdByName(q: Queryable, name: string): Promise<string | null> {
+  const r = await runOne<{ id: string }>(q, "SELECT id FROM businesses WHERE name = $1", [name]);
+  return r ? r.id : null;
+}
+/** Seed/setup only (admin pool). */
+export async function hasBusinessMember(q: Queryable, businessId: string, userId: string): Promise<boolean> {
+  const r = await runOne<{ ok: number }>(q, "SELECT 1 AS ok FROM business_members WHERE business_id = $1 AND user_id = $2", [uuid(businessId), uuid(userId)]);
+  return r !== null;
+}
 export interface LockPolicy {
   /** Failures before the first lock. */
   threshold: number;

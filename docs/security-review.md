@@ -92,3 +92,15 @@ Live M3 run (Testnet): one validated `tesSUCCESS` payment of exactly 1 RLUSD, on
 Seed and password search (counts only, one-off script deleted): 0 hits for each wallet seed and for the local database passwords across the working tree outside `.secrets`, `node_modules` and `.git`.
 
 Not verified: a hosted Supabase database (see `docs/supabase-runbook.md`), HTTPS and deployment hardening, behaviour of the guard under a real process crash on Windows, and independent review of the test coverage claims above.
+## M4 additions
+Scope: owner web app and API (`apps/web`), migration 0006. Details and decisions are in `docs/m4-notes.md`.
+| Control | Where | Evidence |
+|---|---|---|
+| Deny-by-default routes with a declared role, owner-only writes, business taken from the session | `server/http/route.ts`, `server/api/routes.ts` | `route-table.test.ts`, `authz.db.test.ts` (401 anonymous, 403 viewer, 404 other tenant, 400 on `business_id`) |
+| Least-privilege `flow_web` role: RLS ENABLE and FORCE, column-level UPDATE, INSERT-only audit, no DELETE or TRUNCATE, no write on money tables | migration 0006 | `web-role.db.test.ts` |
+| Audit event in the same transaction as every policy or supplier change; hash chain intact | `server/api/policy.ts`, `suppliers.ts` | `policy-atomicity.db.test.ts`, `policy-effect.db.test.ts` |
+| Optimistic concurrency (`If-Match`), risky-change confirmation, step-up login | `server/api/policy.ts` | `policy-atomicity.db.test.ts`, contracts `web-api.test.ts` |
+| Sessions: hashed token, rotation, idle and absolute expiry, revocation, CSRF token plus Origin check, login lockout and rate limit, generic errors | `server/auth/*` | `auth-primitives.test.ts`, `auth-sessions.db.test.ts` |
+| CSP with per-request nonce, HSTS in production, nosniff, frame-ancestors none; no `dangerouslySetInnerHTML` (lint-enforced); hostile strings render as text | `proxy.ts`, `security-headers.ts`, eslint | `security-headers.test.ts`, `xss.test.tsx`, `bundle-secrets.test.ts` |
+| Web config refuses guard, agent and signer secrets | `server/config.ts` | `config.test.ts` |
+Residual risks: scrypt instead of the platform's auth until M6 (AU-1 exception); no MFA, password reset or session list; `login_attempts` rows are never pruned (no DELETE right); shared IP bucket without a trusted proxy; accessibility checks are automated jsdom only and no formal WCAG audit was done; no real-browser CSP or end-to-end test (no Playwright); the web Pause changes policy only and the environment kill switch is separate.

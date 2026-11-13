@@ -29,7 +29,7 @@ Map: ASVS V2, V3; T10 A07.
 
 | ID | Rule | How to verify |
 |---|---|---|
-| AU-1 | Use the hosting platform's vetted auth (Supabase Auth). No custom password storage or token minting. | review: no `bcrypt`, `jwt.sign` in app code |
+| AU-1 | Use the hosting platform's vetted auth (Supabase Auth). No custom password storage or token minting. Dated exception for local M4 (scrypt in `apps/web/src/server/auth`, see `docs/m4-notes.md`); swap to Supabase Auth in M6. | review: no `bcrypt`, `jwt.sign` in app code |
 | AU-2 | Verify the JWT signature, `iss`, `aud` and `exp` server-side on every request. Reject `alg: none` and unexpected algorithms. | negative tests with tampered, expired, wrong-audience tokens |
 | AU-3 | Session cookies: `HttpOnly`, `Secure`, `SameSite=Lax` (or `Strict`), `Path=/`, `__Host-` prefix where possible, short idle timeout, rotate on login, invalidate on logout. | test asserts `Set-Cookie` attributes |
 | AU-4 | No tokens in URLs or `localStorage`. | grep + review |

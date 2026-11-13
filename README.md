@@ -12,7 +12,7 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M1 | One real RLUSD payment from a script | Done. 2 validated `tesSUCCESS` payments of 1 RLUSD (cross-border and domestic suppliers) with exact balance deltas; see `docs/m1-notes.md` |
 | M2 | Pure policy engine | Done. 169 tests in 5 files (per `docs/m2-notes.md`) |
 | M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Tests: 419 in `pnpm test` (contracts 49, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 118) and 98 in `pnpm test:db`; see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
-| M4 | Owner policy API and page, audit events | Not started |
+| M4 | Owner policy API and page, audit events | Done locally (Docker Postgres, no Supabase). Owner login, policy page with confirm and conflict handling, suppliers and audit pages, nonce CSP, same-transaction audit events, and a proof that lowering the cap blocks the next payment request. Tests: 565 in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 131, web 115) and 160 in `pnpm test:db`; typecheck, lint, secret-scan and audit pass. Built to WCAG 2.2 AA guidelines, not formally audited; no real-browser test. See `docs/m4-notes.md` |
 | M5 | Agent plus MCP tools | Not started |
 | M6 | Dashboard screens and deployed URL | Not started |
 | M7 | Revocable regular-key backstop | Not started |
@@ -34,22 +34,22 @@ Three processes and four packages, each process with its own credentials.
                     agent (LLM loop) --MCP tools
 ```
 
-- `apps/web`: dashboard and authenticated app API.
+- `apps/web`: owner pages (login, overview, policy, suppliers, audit) and the authenticated app API. It uses its own `flow_web` database role and holds no signing key.
 - `apps/payment-guard`: policy service and signer module. The only process that holds a signing key.
 - `apps/agent`: agent loop and MCP tools. No database credential, no signer.
 - Packages: `contracts` (shared Zod schemas), `database`, `xrpl-adapter`, `policy-engine`.
 
 Trust boundary: the agent never holds keys or policy. It can only ask the guard to pay an invoice. The guard rebuilds the payment from its own canonical records, ignoring any amount or destination the model supplies, runs the policy checks, and signs only on an allow decision. The owner sets limits outside the agent. The enforcement is application-layer, not a trustless on-ledger restriction. The spec adds a revocable regular key (M7) as an on-ledger backstop that lets the owner cut off the guard's signing authority.
 
-`packages/contracts`, `packages/policy-engine`, `packages/xrpl-adapter`, `packages/database` and `apps/payment-guard` are implemented (M0 to M3); `apps/web` and `apps/agent` are still typechecked placeholders.
+`packages/contracts`, `packages/policy-engine`, `packages/xrpl-adapter`, `packages/database` and `apps/payment-guard` are implemented (M0 to M3); `apps/web` is implemented (M4); `apps/agent` is still a typechecked placeholder.
 
 ## Repo layout
 
 ```text
 apps/            web, payment-guard, agent
 packages/        contracts, database, xrpl-adapter, policy-engine
-scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, m3-e2e, setup-hooks, git-hooks/
-docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
+scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, m3-e2e, seed-demo-owner, dev-web, setup-hooks, git-hooks/
+docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, m4-notes.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
 Flow_AI_MVP_README_v3.5.md   spec of record
 .env.example     environment template (placeholders only)
 ```
@@ -74,6 +74,8 @@ Scripts:
 - `pnpm test:db`: database and guard integration tests against the local Docker Postgres (each run uses a throwaway database).
 - `pnpm guard:dev`: starts the payment guard on 127.0.0.1:4002 (Testnet). The signer seed is read from `.secrets` by the launcher and handed to the guard through its environment in memory; the agent token is random per launch.
 - `pnpm m3:e2e -- --blocked-only`: starts a fresh local database and the guard and shows an over-cap request being blocked (submits nothing). `pnpm m3:e2e -- --confirm-real-payment` makes the ONE authorised real 1 RLUSD payment and refuses to run again (already used; see `docs/m3-notes.md`).
+- `pnpm db:seed:demo`: creates the labelled demo business (if missing) and one owner login in the local database. The owner password comes from `DEMO_OWNER_PASSWORD` or `.secrets/web-owner.env` (generated there if absent) and is never printed. Run `pnpm db:migrate -- --local` first. Re-running is a no-op; `-- --reset-password` replaces the password.
+- `pnpm dev:web`: starts the owner web app on http://127.0.0.1:3000 against the local database as the `flow_web` role (connection assembled in memory, allowlisted environment).
 - `pnpm secret-scan`: scans staged, tracked and untracked files for seeds, hex keys, signed blobs, API keys, tokens and PEM blocks without printing matches.
 - `pnpm setup:hooks`: opt-in; installs the versioned pre-commit hook for this clone.
 - `pnpm lint`: ESLint with typed rules and `eslint-plugin-security` (zero warnings allowed).
@@ -94,7 +96,7 @@ RLUSD claim (manual, only needed to top up): open https://tryrlusd.com/, choose 
 ## Documentation and resources
 
 - Spec: [Flow_AI_MVP_README_v3.5.md](Flow_AI_MVP_README_v3.5.md)
-- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m1-notes.md](docs/m1-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
+- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m1-notes.md](docs/m1-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [docs/m3-notes.md](docs/m3-notes.md), [docs/m4-notes.md](docs/m4-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
 - RLUSD on the XRPL (Ripple docs): https://docs.ripple.com/products/stablecoin/developer-resources/rlusd-on-the-xrpl
 - Send a trust line token: https://xrpl.org/docs/tutorials/payments/send-a-trust-line-token
 - xrpl.js: https://js.xrpl.org/
