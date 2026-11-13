@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  '@embedded-postgres/windows-x64': false
   esbuild: true
 overrides:
   minimatch: 11.0.8

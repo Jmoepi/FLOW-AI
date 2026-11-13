@@ -22,6 +22,10 @@
     "db:up": "tsx scripts/db-local.ts up",
     "db:down": "tsx scripts/db-local.ts down",
     "db:status": "tsx scripts/db-local.ts status",
+    "db:up:native": "tsx scripts/db-native.ts up",
+    "db:down:native": "tsx scripts/db-native.ts down",
+    "db:status:native": "tsx scripts/db-native.ts status",
+    "db:reset:native": "tsx scripts/db-native.ts reset",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "guard:dev": "tsx scripts/guard-dev.ts",
     "agent:run": "tsx scripts/agent-run.ts",
@@ -37,6 +41,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.2",
+    "embedded-postgres": "16.15.0-beta.19",
     "eslint": "10.14.0",
     "eslint-plugin-security": "4.2.1",
     "tsx": "4.23.15",

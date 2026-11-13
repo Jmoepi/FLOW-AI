@@ -5,6 +5,7 @@ export * from "./tx";
 export * from "./health";
 export * from "./repos";
 export * from "./local";
+export * from "./native";
 export * from "./migrate";
 export * from "./seed";
 export type { Pool, PoolClient } from "pg";

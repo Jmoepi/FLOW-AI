@@ -111,3 +111,14 @@ export async function ensureLocalGuardRole(secrets: LocalDbSecrets): Promise<voi
     await client.end();
   }
 }
+/** Creates the flow_ai database when missing (the Docker image does this through POSTGRES_DB; the native path needs it). */
+export async function ensureLocalDatabase(secrets: LocalDbSecrets): Promise<void> {
+  const client = new pg.Client(localAdminConfig(secrets, "postgres"));
+  await client.connect();
+  try {
+    const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [LOCAL_DB.database]);
+    if (exists.rowCount === 0) await client.query(`CREATE DATABASE "${LOCAL_DB.database}"`);
+  } finally {
+    await client.end();
+  }
+}

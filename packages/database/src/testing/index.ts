@@ -7,7 +7,10 @@ import { migrate } from "../migrate";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 export const SECRETS_DIR = path.join(ROOT, ".secrets");
-export const NOT_REACHABLE_MESSAGE = `Postgres not reachable at ${LOCAL_DB.host}:${String(LOCAL_DB.port)}. Start Docker Desktop, then run: pnpm db:up`;
+export const NOT_REACHABLE_MESSAGE =
+  process.env.FLOW_TEST_DB === "native"
+    ? `Postgres not reachable at ${LOCAL_DB.host}:${String(LOCAL_DB.port)}. Start the Docker-free database with: pnpm db:up:native`
+    : `Postgres not reachable at ${LOCAL_DB.host}:${String(LOCAL_DB.port)}. Start Docker Desktop, then run: pnpm db:up (or, without Docker: pnpm db:up:native)`;
 
 /** Set by the vitest globalSetup; every throwaway database created in that run is tagged with it so teardown can drop them. */
 export const TEST_RUN_ENV = "FLOW_TEST_RUN_ID";

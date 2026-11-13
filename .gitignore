@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .secrets/
+.local-pg/
 *.seed
 *wallets*.json
 
