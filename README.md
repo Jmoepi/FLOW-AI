@@ -11,8 +11,8 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M0 | Preflight: repo, strict TypeScript, env template, secret scan, Testnet accounts, trust lines | Done. RLUSD claimed; `pnpm preflight` passes (see `docs/m0-notes.md`) |
 | M1 | One real RLUSD payment from a script | Done. 2 validated `tesSUCCESS` payments of 1 RLUSD (cross-border and domestic suppliers) with exact balance deltas; see `docs/m1-notes.md` |
 | M2 | Pure policy engine | Done. 172 tests (169 at M2, plus 3 added by the F-14 review fix; see `docs/m2-notes.md`) |
-| M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Follow-up Medium findings M-1 (audit-chain verify job) and M-2 (`GUARD_BUSINESS_ID` required in production) are fixed. Tests at the current HEAD (counts include M4 work): 565 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 131, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
-| M4 | Owner policy API and page, audit events | Done locally (Docker Postgres, no Supabase). Owner login, policy page with confirm and conflict handling, suppliers and audit pages, nonce CSP, same-transaction audit events, and a proof that lowering the cap blocks the next payment request. Tests: 565 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 131, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); typecheck, lint, secret-scan and audit pass. Built to WCAG 2.2 AA guidelines, not formally audited; no real-browser test. See `docs/m4-notes.md` |
+| M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Follow-up Medium findings M-1 (audit-chain verify job) and M-2 (`GUARD_BUSINESS_ID` required in production) are fixed. Tests at the current HEAD (counts include M4 work): 567 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 133, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
+| M4 | Owner policy API and page, audit events | Done locally (Docker Postgres, no Supabase). Owner login, policy page with confirm and conflict handling, suppliers and audit pages, nonce CSP, same-transaction audit events, and a proof that lowering the cap blocks the next payment request. Tests: 567 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 133, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); typecheck, lint, secret-scan and audit pass. Built to WCAG 2.2 AA guidelines, not formally audited; no real-browser test. See `docs/m4-notes.md` |
 | M5 | Agent plus MCP tools | Not started |
 | M6 | Dashboard screens and deployed URL | Not started |
 | M7 | Revocable regular-key backstop | Not started |
@@ -49,7 +49,7 @@ Trust boundary: the agent never holds keys or policy. It can only ask the guard 
 apps/            web, payment-guard, agent
 packages/        contracts, database, xrpl-adapter, policy-engine
 scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, m3-e2e, seed-demo-owner, dev-web, setup-hooks, git-hooks/
-docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, m4-notes.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
+docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, m4-notes.md, local-dev.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
 Flow_AI_MVP_README_v3.5.md   spec of record
 .env.example     environment template (placeholders only)
 ```
@@ -62,6 +62,8 @@ Prerequisites: Node 20.19 or newer (`engines`; M0 ran on Node 24.17.0) and pnpm 
 pnpm install
 cp .env.example .env        # fill in values; .env is gitignored
 ```
+
+Local development: the full stack runs on a local Docker Postgres. Run `pnpm db:up`, `pnpm db:migrate -- --local`, `pnpm db:seed:demo`, then `pnpm guard:dev` and `pnpm dev:web`. See [docs/local-dev.md](docs/local-dev.md). Supabase hosting is deferred: the migrations have not been applied to a hosted project (see [docs/supabase-runbook.md](docs/supabase-runbook.md)).
 
 Scripts:
 
