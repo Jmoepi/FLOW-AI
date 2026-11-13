@@ -555,6 +555,7 @@ Rules:
 - `FAILED`: a validated `tec` result, a delivered amount that differs from the intended amount, or a transaction that is definitively non-executing (the validated ledger index has passed `LastLedgerSequence` and the transaction is not in any validated ledger). Handle the reservation according to the failure type (10.3).
 - `CANCELLED`: a cancellation occurred before signing and the reservation was safely released (5A.2).
 
+Implementation note (M3): there is no separate `SIGNING` state. A crash between signing and submission maps onto the existing states: the signed hash, `LastLedgerSequence` and blob are persisted in the same transaction that moves `RESERVED` to `SUBMITTED`, before anything is sent, and the reconciler resolves it from there. Unsigned stale `RESERVED` payments become `CANCELLED`.
 Do not move a payment from `VALIDATED` back to `SUBMITTED`. Preserve every transition as an append-only event or auditable history row. A retry must either resume/reconcile the original transaction or create a new, explicitly linked attempt after the prior attempt is definitively non-executing.
 
 ### 5A.1 Invoice status versus payment status
@@ -946,6 +947,7 @@ Use a unique/locking strategy that prevents concurrent requests from exceeding t
 - `idempotency_key`
 - `tx_hash` nullable
 - `last_ledger_sequence` nullable
+- `request_hash` (SHA-256 of the canonical request, used to reject idempotency-key reuse with a different body), `signed_blob` nullable (cleared after a final outcome), `first_ledger_sequence` nullable, `previous_payment_id` nullable (explicit link to a prior definitively non-executing attempt), `business_date` (business-timezone day used for the daily cap) (M3 additive columns)
 - `ledger_index` nullable
 - `result_code` nullable
 - `delivered_amount` nullable
@@ -981,6 +983,7 @@ Add unique constraints for idempotency key within the business and prevent multi
 - `entity_id`
 - `metadata` JSONB with secrets and unnecessary personal data excluded
 - `created_at`
+- `seq`, `prev_hash`, `row_hash` (per-business hash chain, verified by `verify_audit_chain`) and `request_id` nullable (M3 additive columns)
 
 ### 8.2 Seed data
 
@@ -1066,6 +1069,7 @@ Response shape:
 ```
 
 This is an illustrative contract. Implement validation schemas and stable enum types. A blocked response must include a machine-readable `failure_code`, a concise human-readable explanation and no transaction hash if nothing was submitted.
+HTTP semantics (M3): `200` for a stored final or blocked result (a repeat with the same key returns the same result), `202` while the payment is still in flight (`pending_confirmation`; reconcile, do not retry), `400` for an invalid body, `409` when the idempotency key is reused with a different request, `401` for a missing or wrong token, `413`, `415` and `429` for oversize, wrong content type and rate limiting. The body is strict: only `invoice_id` (UUID), `idempotency_key` (8 to 128 characters of `A-Za-z0-9._:-`) and optional `agent_reason` (at most 280 characters, no control characters); unknown fields are rejected.
 
 ### 9.3 Policy decision codes
 

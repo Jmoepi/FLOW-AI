@@ -17,7 +17,14 @@
     "m1:send": "tsx scripts/m1-send-rlusd.ts",
     "lint": "eslint . --max-warnings 0",
     "audit": "pnpm audit --prod",
-    "setup:hooks": "tsx scripts/setup-hooks.ts"
+    "setup:hooks": "tsx scripts/setup-hooks.ts",
+    "test:db": "pnpm -r --if-present test:db",
+    "db:up": "tsx scripts/db-local.ts up",
+    "db:down": "tsx scripts/db-local.ts down",
+    "db:status": "tsx scripts/db-local.ts status",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "guard:dev": "tsx scripts/guard-dev.ts",
+    "m3:e2e": "tsx scripts/m3-e2e.ts"
   },
   "dependencies": {
     "dotenv": "18.0.10",
