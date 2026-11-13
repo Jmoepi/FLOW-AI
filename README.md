@@ -11,7 +11,7 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M0 | Preflight: repo, strict TypeScript, env template, secret scan, Testnet accounts, trust lines | Done. RLUSD claimed; `pnpm preflight` passes (see `docs/m0-notes.md`) |
 | M1 | One real RLUSD payment from a script | Done. 2 validated `tesSUCCESS` payments of 1 RLUSD (cross-border and domestic suppliers) with exact balance deltas; see `docs/m1-notes.md` |
 | M2 | Pure policy engine | Done. 169 tests in 5 files (per `docs/m2-notes.md`) |
-| M3 | Payment guard with persistence | Not started |
+| M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Tests: 419 in `pnpm test` (contracts 49, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 118) and 98 in `pnpm test:db`; see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
 | M4 | Owner policy API and page, audit events | Not started |
 | M5 | Agent plus MCP tools | Not started |
 | M6 | Dashboard screens and deployed URL | Not started |
@@ -20,7 +20,7 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 
 The hosting decision for the deployed demo URL has not been made.
 
-Security review of the M0 to M2 code: done (0 Critical, 1 High and 6 Medium defects fixed; one M3 precondition tracked). See `docs/security-review.md`; rules for M3 and later are in `docs/secure-coding-standards.md`.
+Security review of the M0 to M2 code: done (0 Critical, 1 High and 7 Medium defects fixed; the M3 precondition F-19 / PG-4 is now closed, see the M3 additions). See `docs/security-review.md`; rules for M3 and later are in `docs/secure-coding-standards.md`.
 
 Demo budget: the RLUSD faucet gives 10 RLUSD per claim per 24 h per account, so demo fixtures are scaled to about 8 to 10 RLUSD, not the 1,000 RLUSD in spec 13A (see the scaled-fixture note there).
 
@@ -41,15 +41,15 @@ Three processes and four packages, each process with its own credentials.
 
 Trust boundary: the agent never holds keys or policy. It can only ask the guard to pay an invoice. The guard rebuilds the payment from its own canonical records, ignoring any amount or destination the model supplies, runs the policy checks, and signs only on an allow decision. The owner sets limits outside the agent. The enforcement is application-layer, not a trustless on-ledger restriction. The spec adds a revocable regular key (M7) as an on-ledger backstop that lets the owner cut off the guard's signing authority.
 
-Apart from `packages/contracts`, `packages/policy-engine` and `packages/xrpl-adapter`, the apps and packages are typechecked placeholders so far.
+`packages/contracts`, `packages/policy-engine`, `packages/xrpl-adapter`, `packages/database` and `apps/payment-guard` are implemented (M0 to M3); `apps/web` and `apps/agent` are still typechecked placeholders.
 
 ## Repo layout
 
 ```text
 apps/            web, payment-guard, agent
 packages/        contracts, database, xrpl-adapter, policy-engine
-scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, setup-hooks, git-hooks/
-docs/            m0-notes.md, m1-notes.md, m2-notes.md, task1-changes.md, security-review.md, secure-coding-standards.md
+scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, m3-e2e, setup-hooks, git-hooks/
+docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
 Flow_AI_MVP_README_v3.5.md   spec of record
 .env.example     environment template (placeholders only)
 ```
@@ -69,12 +69,17 @@ Scripts:
 - `pnpm trust-lines`: creates the RLUSD trust lines for those accounts. Skips ones that exist.
 - `pnpm preflight`: read-only check of network, issuer, currency hex, reserves, trust lines and treasury RLUSD balance. It exits non-zero (2, BLOCKED) when the treasury holds no RLUSD.
 - `pnpm m1:send -- --dry-run` / `pnpm m1:send -- --to domestic`: M1 sender. Sends 1 RLUSD (hard cap 2, treasury keeps at least 5, at most 2 real payments, Testnet only), logs to the gitignored `.secrets/m1-transactions.json`, prints the validated hash and explorer URL, and proves the balance delta.
+- `pnpm db:up` / `pnpm db:down` / `pnpm db:status`: start, stop and check the local Postgres in Docker (loopback only, port 54329). Passwords are generated into the gitignored `.secrets/local-db.env` and never printed. Docker Desktop must be running. Without the script: `docker compose -f docker-compose.local-db.yml up -d --wait` needs `FLOW_LOCAL_PG_PASSWORD` set, so prefer `pnpm db:up`.
+- `pnpm db:migrate [status]`: applies the SQL migrations to the local database (a non-local `DATABASE_URL` needs `--allow-remote` and TLS).
+- `pnpm test:db`: database and guard integration tests against the local Docker Postgres (each run uses a throwaway database).
+- `pnpm guard:dev`: starts the payment guard on 127.0.0.1:4002 (Testnet). The signer seed is read from `.secrets` by the launcher and handed to the guard through its environment in memory; the agent token is random per launch.
+- `pnpm m3:e2e -- --blocked-only`: starts a fresh local database and the guard and shows an over-cap request being blocked (submits nothing). `pnpm m3:e2e -- --confirm-real-payment` makes the ONE authorised real 1 RLUSD payment and refuses to run again (already used; see `docs/m3-notes.md`).
 - `pnpm secret-scan`: scans staged, tracked and untracked files for seeds, hex keys, signed blobs, API keys, tokens and PEM blocks without printing matches.
 - `pnpm setup:hooks`: opt-in; installs the versioned pre-commit hook for this clone.
 - `pnpm lint`: ESLint with typed rules and `eslint-plugin-security` (zero warnings allowed).
 - `pnpm run audit`: `pnpm audit --prod` (use `run`: bare `pnpm audit` is the built-in and also checks dev dependencies).
 - `pnpm typecheck`: strict TypeScript across the root and all workspaces.
-- `pnpm test`: runs workspace tests (contracts, policy engine and XRPL adapter suites; the adapter tests use a mocked ledger and spend no RLUSD).
+- `pnpm test`: runs workspace unit tests (contracts, policy engine, XRPL adapter, database helpers and guard; mocked ledger, no Docker, no RLUSD spent).
 
 RLUSD claim (manual, only needed to top up): open https://tryrlusd.com/, choose Testnet, and claim for the treasury address `rHwNC93iYF7ZcSpZJbVZiwLmpiCKauoHuo`. The faucet gives 10 RLUSD per claim per 24 h per account. Run `pnpm preflight` afterwards.
 

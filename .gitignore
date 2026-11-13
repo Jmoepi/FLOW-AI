@@ -35,3 +35,6 @@ Thumbs.db
 npm-debug.log*
 .vitest-cache/
 .vitest/
+# Local workflow artifacts and reference PDFs
+.agents/
+*.pdf

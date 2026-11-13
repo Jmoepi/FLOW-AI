@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { ALLOWED_TESTNET_WS_URLS, MAINNET_RLUSD_ISSUER, assertAllowedTestnetUrl, assertTestnetAsset, assertTestnetConfig } from "../src/index";
+import {
+  ALLOWED_TESTNET_WS_URLS,
+  MAINNET_RLUSD_ISSUER,
+  assertAllowedTestnetUrl,
+  assertTestnetAsset,
+  assertTestnetConfig,
+  parseCompleteLedgers,
+  rangesCover,
+} from "../src/index";
+
+describe("complete_ledgers parsing", () => {
+  it("parses ranges and single ledgers; malformed or empty input yields none", () => {
+    expect(parseCompleteLedgers("100-200,205,300-400")).toEqual([
+      { minLedger: 100, maxLedger: 200 },
+      { minLedger: 205, maxLedger: 205 },
+      { minLedger: 300, maxLedger: 400 },
+    ]);
+    expect(parseCompleteLedgers("empty")).toEqual([]);
+    expect(parseCompleteLedgers("10-x")).toEqual([]);
+    expect(parseCompleteLedgers("20-10")).toEqual([]);
+    expect(parseCompleteLedgers(undefined)).toEqual([]);
+  });
+  it("rangesCover needs one contiguous range", () => {
+    const r = parseCompleteLedgers("100-200,202-300");
+    expect(rangesCover(r, 100, 200)).toBe(true);
+    expect(rangesCover(r, 150, 250)).toBe(false);
+  });
+});
 
 const GOOD = "wss://s.altnet.rippletest.net:51233";
 const TESTNET_ISSUER = "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV";

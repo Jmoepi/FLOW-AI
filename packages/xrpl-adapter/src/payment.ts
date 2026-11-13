@@ -1,7 +1,7 @@
 import { redactError } from "@flow-ai/contracts";
 import { Wallet, type Payment } from "xrpl";
 import { issuedAmountsEqual, parseAmount, type IssuedAmount } from "./amount";
-import type { LedgerGateway, SubmitAck } from "./gateway";
+import { isGuardLedgerGateway, rangesCover, type LedgerGateway, type SubmitAck } from "./gateway";
 import { walletQueue, type KeyedQueue } from "./queue";
 
 /** Spec 10.3: the payment flow. prepare/autofill -> sign -> persist -> submit -> wait -> reconcile. */
@@ -31,6 +31,8 @@ export interface SignedPayment {
   hash: string;
   txBlob: string;
   lastLedgerSequence: number;
+  /** Validated ledger index read just before signing; the lower bound for later history searches. */
+  firstLedgerSequence: number;
   sequence: number;
   feeDrops: string;
   account: string;
@@ -88,11 +90,13 @@ export function classifyValidated(
  */
 export async function reconcilePayment(
   gw: LedgerGateway,
-  ref: { hash: string; lastLedgerSequence: number },
+  ref: { hash: string; lastLedgerSequence: number; firstLedgerSequence?: number | undefined },
   expected: IssuedAmount,
 ): Promise<PaymentOutcome> {
   const validatedLedgerIndex = await gw.getValidatedLedgerIndex();
-  const tx = await gw.lookupTx(ref.hash);
+  const first = ref.firstLedgerSequence;
+  const range = first !== undefined && Number.isSafeInteger(first) && first >= 1 && first <= validatedLedgerIndex ? { minLedger: first, maxLedger: validatedLedgerIndex } : undefined;
+  const tx = await gw.lookupTx(ref.hash, range);
   if (tx.status === "found") {
     if (tx.validated && tx.resultCode && tx.ledgerIndex !== undefined) {
       return classifyValidated(ref.hash, tx.ledgerIndex, tx.resultCode, tx.deliveredAmount, tx.feeDrops, expected);
@@ -100,7 +104,17 @@ export async function reconcilePayment(
     return { kind: "pending", hash: ref.hash, lastLedgerSequence: ref.lastLedgerSequence, validatedLedgerIndex, seenOnLedger: true, reason: "found but not yet in a validated ledger" };
   }
   if (validatedLedgerIndex > ref.lastLedgerSequence) {
-    return { kind: "failed_expired", hash: ref.hash, lastLedgerSequence: ref.lastLedgerSequence, validatedLedgerIndex };
+    // F-19 / PG-4: "not found" is only proof of absence when the searched history is provably complete.
+    let proven = tx.searchedAll === true; // XrplGateway only reports this for a ranged lookup
+    if (!proven && range !== undefined && isGuardLedgerGateway(gw)) {
+      try {
+        proven = rangesCover(await gw.getCompleteLedgers(), range.minLedger, ref.lastLedgerSequence + 1);
+      } catch {
+        proven = false; // cannot prove: fail closed
+      }
+    }
+    if (proven) return { kind: "failed_expired", hash: ref.hash, lastLedgerSequence: ref.lastLedgerSequence, validatedLedgerIndex };
+    return { kind: "pending", hash: ref.hash, lastLedgerSequence: ref.lastLedgerSequence, validatedLedgerIndex, seenOnLedger: false, reason: "history incomplete (cannot prove not found)" };
   }
   return { kind: "pending", hash: ref.hash, lastLedgerSequence: ref.lastLedgerSequence, validatedLedgerIndex, seenOnLedger: false, reason: "not found yet; LastLedgerSequence still in the future" };
 }
@@ -123,7 +137,7 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
  */
 export async function submitAndWait(
   gw: LedgerGateway,
-  signed: Pick<SignedPayment, "hash" | "txBlob" | "lastLedgerSequence" | "amount">,
+  signed: Pick<SignedPayment, "hash" | "txBlob" | "lastLedgerSequence" | "amount"> & { firstLedgerSequence?: number | undefined },
   opts: WaitOptions = {},
 ): Promise<PaymentOutcome> {
   const emit = async (e: PaymentEvent) => {
@@ -133,7 +147,7 @@ export async function submitAndWait(
   const now = opts.now ?? Date.now;
   const interval = opts.pollIntervalMs ?? 2000;
   const deadline = now() + (opts.timeoutMs ?? 120_000);
-  const ref = { hash: signed.hash, lastLedgerSequence: signed.lastLedgerSequence };
+  const ref = { hash: signed.hash, lastLedgerSequence: signed.lastLedgerSequence, firstLedgerSequence: signed.firstLedgerSequence };
 
   const first = await reconcilePayment(gw, ref, signed.amount);
   if (isFinalOutcome(first)) {
@@ -217,6 +231,7 @@ export async function prepareAndSign(p: Omit<SendPaymentParams, "onSigned" | "dr
     hash,
     txBlob,
     lastLedgerSequence: lls,
+    firstLedgerSequence: validated,
     sequence: prepared.Sequence,
     feeDrops: prepared.Fee,
     account: p.signer.address,

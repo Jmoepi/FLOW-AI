@@ -4,7 +4,7 @@ Scope: our own code on branch `feat/m0-m2-scaffold` (scripts, `packages/contract
 
 Severity scale: Critical (direct loss of funds or key), High (bypass of a core control), Medium (weakens a control or leaks secret-shaped data under plausible conditions), Low (hardening, hygiene). Status: Fixed, Mitigated, Accepted, Open (with owner milestone).
 
-Result: 0 Critical, 1 High (F-01), 7 Medium (F-02 to F-07 and F-19), 13 Low. Every Critical/High/Medium finding in existing code is Fixed. The one Open item, F-19 (Medium), is a future-facing M3 precondition rather than a defect in current behaviour, and is recorded as a binding rule (PG-4). All Lows are Fixed or Accepted with reasons.
+Result: 0 Critical, 1 High (F-01), 7 Medium (F-02 to F-07 and F-19), 13 Low. Every Critical/High/Medium finding in existing code is Fixed. F-19 (Medium) was a future-facing M3 precondition (binding rule PG-4); it was Open at the M0 to M2 review and is now Fixed (see M3 additions below). All Lows are Fixed or Accepted with reasons.
 
 ## Findings
 
@@ -28,7 +28,7 @@ Result: 0 Critical, 1 High (F-01), 7 Medium (F-02 to F-07 and F-19), 13 Low. Eve
 | F-16 | Low | `.git/hooks/pre-commit` | The hook was unversioned and per-machine. | Fixed. Versioned `scripts/git-hooks/pre-commit` (fails closed if `pnpm` is missing), `pnpm setup:hooks` sets `core.hooksPath` for the clone only when the user runs it (not run here, git config untouched). `.gitattributes` forces LF on hooks. Hooks can be skipped, so CI must run `pnpm secret-scan` (SC-1). The existing local hook is unchanged and still works. |
 | F-17 | Low | repo root | Supply chain: dev-only advisory in `minimatch` (moderate, GHSA-g3hv-75wg-m249, via eslint) once lint was added; no `.npmrc`; no audit script. | Fixed. `overrides: minimatch: 11.0.8` in `pnpm-workspace.yaml`, `.npmrc` `ignore-scripts=true` (tested from a clean install: install, tsx, vitest, eslint all work; esbuild ships prebuilt binaries and stays in `allowBuilds`), script `pnpm run audit` = `pnpm audit --prod`. |
 | F-18 | Low | `scripts/lib/common.ts` | Uncaught exceptions and rejections printed a raw stack (can embed argument values). | Fixed. Global handlers print a redacted one-line message and exit 1. |
-| F-19 | Medium (future, M3) | `packages/xrpl-adapter/src/gateway.ts` `lookupTx`, `payment.ts` `reconcilePayment` | M1 reviewer minor 3: "not found" is only definitive if the server has full history for the range; `failed_expired` is only reported today and nothing retries on it. | Open, owner M3. Not exploitable in M0 to M2. Recorded as a binding precondition in `docs/secure-coding-standards.md` PG-4. |
+| F-19 | Medium (future, M3) | `packages/xrpl-adapter/src/gateway.ts` `lookupTx`, `payment.ts` `reconcilePayment` | M1 reviewer minor 3: "not found" is only definitive if the server has full history for the range; `failed_expired` is only reported today and nothing retries on it. | Fixed in M3 (originally Open, owner M3; not exploitable in M0 to M2). `reconcilePayment` now reports `failed_expired` only when absence is proven: the server reported `searched_all` for a ranged lookup, or `complete_ledgers` covers the range; otherwise it stays pending. Evidence: `packages/xrpl-adapter/test/payment.test.ts` (F-19 tests) and `apps/payment-guard/test/reconcile.test.ts` (history not proven complete stays pending; searched_all and complete_ledgers cases expire). PG-4 closed. |
 | F-20 | Low | `scripts/setup-testnet-accounts.ts:22` | `assertSecretsIgnored` matched `.secrets/` text in `.gitignore`; a later negation would defeat it. | Fixed. Asks `git check-ignore` first, falls back to the textual check. |
 | F-21 | Low | `scripts/m1-send-rlusd.ts` | `m1:send` does not read `PAYMENT_EXECUTION_ENABLED`. | Accepted. It is an owner-run script with hard caps, and gating it would change the proven M1 flow and require new env setup. The guard must enforce the switch from M3 (G-5, PG-7). |
 
@@ -66,3 +66,29 @@ Not verified: the `m1:send` lock and the real-network paths of `connectTestnetCl
 
 - Optional: run `pnpm setup:hooks` once to activate the versioned pre-commit hook, and add `pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm lint && pnpm secret-scan && pnpm run audit` to CI when it exists.
 - Optional: enable GitHub private vulnerability reporting on the repository so `SECURITY.md` works as written.
+
+## M3 additions
+
+Added with the payment guard (`apps/payment-guard`, `packages/database`). History above is unchanged. Evidence is by test file; counts are from the final M3 run: `pnpm test` 419 passing (contracts 49, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 118) and `pnpm test:db` 98 passing (database 37, payment-guard 61, against local Docker Postgres).
+
+| Threat | Control | Evidence |
+|---|---|---|
+| Caller or model chooses recipient or amount (PG-1) | Guard rebuilds the payment from canonical rows; strict request body (`invoice_id`, `idempotency_key`, `agent_reason` only) | `http.test.ts`, `rules.db.test.ts` |
+| Race past the daily cap (PG-2) | Policy check, reservation and payment row in one transaction; cap enforced by a database trigger | `concurrency.db.test.ts` |
+| Double payment on retry (PG-3) | Unique idempotency key per business, one open payment per invoice, `request_hash` rejects key reuse with a different body; live run showed the duplicate returned the same result | `concurrency.db.test.ts`, `outcomes.db.test.ts`, live run in `docs/m3-notes.md` |
+| Unproven failure unlocks a retry (F-19, PG-4) | Hash, `LastLedgerSequence` and blob persisted before submit; reconcile by hash; expiry only when history is proven complete | `reconcile.test.ts`, adapter `payment.test.ts` |
+| Tampered or unapproved transaction signed (PG-5, PG-8) | Signer signs only a typed instruction from the stored row; allowlisted fields; partial-payment flags refused | `signer.test.ts` |
+| Seed exposure (SV-5) | Seed variable named only in the signer module (source-scan test); the launcher passes it through the child environment in memory | `signer.test.ts`; counts-only seed search below |
+| Concurrent signers (PG-6) | Per-wallet session advisory lock plus in-process queue | `concurrency.db.test.ts` |
+| Kill switch bypass (PG-7) | Exact `true` re-read on every sign call | `signer.test.ts`, `outcomes.db.test.ts` |
+| Blob kept after final outcome (PG-10) | `signed_blob` cleared on final status; live run showed NULL | `outcomes.db.test.ts`, live run |
+| Audit tampering (AL-1 to AL-4) | Append-only table, hash chain verified by `verify_audit_chain`; no UPDATE, DELETE or TRUNCATE for the guard role | `security.db.test.ts`, `state.db.test.ts`; live chain verified |
+| Direct database abuse (AZ-5, 13.1B) | Least-privilege `flow_guard` role, forced RLS, no grants for anon, authenticated or PUBLIC; startup refuses a superuser or BYPASSRLS role | `schema.db.test.ts`, `security.db.test.ts` |
+| Unauthorised API use (SV-1, SV-2) | Bearer token, constant-time compare, two-token rotation, rate limit, body size and content-type limits | `auth.test.ts`, `http.test.ts`, `config.test.ts` |
+| Secrets in logs (G-3) | One redacting logger | `logger.test.ts` |
+
+Live M3 run (Testnet): one validated `tesSUCCESS` payment of exactly 1 RLUSD, one blocked over-cap request (nothing submitted) and one duplicate request (same result, no second payment); treasury kept 5 RLUSD. Details and caveats in `docs/m3-notes.md`.
+
+Seed and password search (counts only, one-off script deleted): 0 hits for each wallet seed and for the local database passwords across the working tree outside `.secrets`, `node_modules` and `.git`.
+
+Not verified: a hosted Supabase database (see `docs/supabase-runbook.md`), HTTPS and deployment hardening, behaviour of the guard under a real process crash on Windows, and independent review of the test coverage claims above.

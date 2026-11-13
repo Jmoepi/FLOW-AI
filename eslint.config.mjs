@@ -29,6 +29,19 @@ export default tseslint.config(
     },
   },
   {
+    // Data access boundary (AZ-5, IN-1): the pg driver and SQL text live only in packages/database.
+    files: ["**/*.ts", "**/*.mts"],
+    ignores: ["packages/database/**"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [{ name: "pg", message: "Use @flow-ai/database; SQL and the pg driver live only in packages/database." }, { name: "pg-pool", message: "Use @flow-ai/database." }], patterns: ["pg/*"] }],
+      "no-restricted-syntax": [
+        "error",
+        { selector: "Literal[value=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
+        { selector: "TemplateElement[value.raw=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
+      ],
+    },
+  },
+  {
     // Test doubles implement async interfaces without awaiting, and tests index loosely typed JSON fixtures.
     files: ["**/test/**/*.ts"],
     rules: {

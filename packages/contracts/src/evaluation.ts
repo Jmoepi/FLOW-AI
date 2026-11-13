@@ -99,6 +99,23 @@ export const AgentPaymentRequestSchema = z.object({
 export type AgentPaymentRequest = z.infer<typeof AgentPaymentRequestSchema>;
 
 /**
+ * What the payment guard accepts over HTTP (PG-1, IN-2). Strict: any other key (amount, destination, business_id,
+ * tx_blob, ...) is rejected, never echoed. Money and destinations always come from canonical records.
+ */
+export const GuardPaymentRequestSchema = z.strictObject({
+  invoice_id: z.uuid(),
+  idempotency_key: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/),
+  /** Data only (13.1A). Control characters are rejected so it cannot smuggle log or terminal escapes. */
+  agent_reason: z
+    .string()
+    .max(280)
+    // eslint-disable-next-line no-control-regex -- the point is to reject control characters
+    .regex(/^[^\u0000-\u001f\u007f]*$/, "control characters are not allowed")
+    .optional(),
+});
+export type GuardPaymentRequest = z.infer<typeof GuardPaymentRequestSchema>;
+
+/**
  * Everything the pure engine needs, resolved by the guard from canonical records and the live ledger.
  * No I/O and no clock inside the engine: `now`, reserves, balances and the kill-switch value are inputs.
  */
