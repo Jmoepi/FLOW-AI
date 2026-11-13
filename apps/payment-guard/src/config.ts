@@ -20,6 +20,8 @@ export interface GuardConfig {
   port: number;
   businessId: string | undefined;
   staleReservationTimeoutSeconds: number;
+  /** A `running` agent run with no activity for this long is marked interrupted by the sweeper. */
+  agentRunStaleSeconds: number;
   balancePollIntervalSeconds: number;
   reconcileIntervalSeconds: number;
   /** How often the audit hash chain is re-verified (AL-3). */
@@ -36,6 +38,9 @@ const int = (min: number, max: number, def: number) =>
     .pipe(z.number().int().min(min).max(max))
     .optional()
     .transform((v) => v ?? def);
+/** Longest wait for a payment answer without a run event (the agent's payment tool timeout), in seconds. */
+export const AGENT_PAYMENT_WAIT_SECONDS = 55;
+export const AGENT_RUN_STALE_MIN_SECONDS = 120;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const token = z.string().min(32).max(256).regex(/^[\x21-\x7e]+$/);
 const EnvSchema = z.object({
@@ -51,6 +56,9 @@ const EnvSchema = z.object({
   GUARD_PORT: int(1, 65535, 4002),
   GUARD_BUSINESS_ID: z.uuid().optional(),
   STALE_RESERVATION_TIMEOUT_SECONDS: int(30, 3600, 300),
+  // Floor: a payment request can wait up to 55 s (agent tool timeout) without any run activity, so the stale threshold must
+  // be well above it or a healthy run could be marked interrupted mid-payment. 120 s = 55 s + a generous margin.
+  AGENT_RUN_STALE_SECONDS: int(AGENT_RUN_STALE_MIN_SECONDS, 3600, 180),
   BALANCE_POLL_INTERVAL_SECONDS: int(5, 600, 30),
   RECONCILE_INTERVAL_SECONDS: int(5, 600, 15),
   AUDIT_VERIFY_INTERVAL_SECONDS: int(10, 86400, 300),
@@ -100,6 +108,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): GuardConfig {
     port: e.GUARD_PORT,
     businessId: e.GUARD_BUSINESS_ID?.toLowerCase(),
     staleReservationTimeoutSeconds: e.STALE_RESERVATION_TIMEOUT_SECONDS,
+    agentRunStaleSeconds: e.AGENT_RUN_STALE_SECONDS,
     balancePollIntervalSeconds: e.BALANCE_POLL_INTERVAL_SECONDS,
     reconcileIntervalSeconds: e.RECONCILE_INTERVAL_SECONDS,
     auditVerifyIntervalSeconds: e.AUDIT_VERIFY_INTERVAL_SECONDS,

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createTestDatabase, seedInvoice, seedScenario, storedTextForLeakScan, type Scenario, type ScenarioOptions, type TestDatabase } from "@flow-ai/database/testing";
+import { createTestDatabase, seedInvoice, seedScenario, storedTextForLeakScan, type InvoiceOptions, type Scenario, type ScenarioOptions, type TestDatabase } from "@flow-ai/database/testing";
 import type { AccountSnapshot, GuardLedgerGateway, LedgerRange, Reserves, SubmitAck, TrustLineState, TxLookup } from "@flow-ai/xrpl-adapter";
 import { Wallet, decode, hashes, type Payment } from "xrpl";
 import { buildApp, type GuardApp } from "../src/app";
@@ -92,7 +92,7 @@ export interface Harness {
   reconciler: Reconciler;
   guard: GuardApp;
   scenario: (o?: Partial<ScenarioOptions>) => Promise<Scenario>;
-  invoice: (s: Scenario, o?: { amount?: string; description?: string | null }) => Promise<string>;
+  invoice: (s: Scenario, o?: InvoiceOptions) => Promise<string>;
   post: (invoiceId: string, key: string, extra?: Record<string, unknown>) => Promise<{ status: number; body: Record<string, unknown>; raw: string }>;
   get: (url: string) => Promise<{ status: number; body: Record<string, unknown>; raw: string }>;
   /** A second service object over the same database and ledger (a "second worker" / a restarted process). */

@@ -245,13 +245,17 @@ async function decideInTransaction(
 function pinned(deps: ServiceDeps, p: PaymentRow | null): PaymentRow | null {
   return p && (deps.config.businessId === undefined || p.business_id === deps.config.businessId) ? p : null;
 }
-export async function getPaymentById(deps: ServiceDeps, id: string): Promise<ReturnType<typeof toPublicPayment> | null> {
+/** Stored-payment read view: the public fields plus the decision code the policy engine produced (9.3). */
+function storedView(p: PaymentRow, config: GuardConfig): ReturnType<typeof toPublicPayment> & { decision_code: string } {
+  return { ...toPublicPayment(p, config), decision_code: p.status === "blocked" ? (p.failure_code ?? "BLOCKED") : "ALLOWED" };
+}
+export async function getPaymentById(deps: ServiceDeps, id: string): Promise<ReturnType<typeof storedView> | null> {
   const p = pinned(deps, await getPayment(deps.pool, id));
-  return p ? toPublicPayment(p, deps.config) : null;
+  return p ? storedView(p, deps.config) : null;
 }
 export async function listPaymentsView(deps: ServiceDeps, f: { invoiceId?: string | undefined; status?: PaymentStatus | undefined; limit?: number | undefined }) {
   const rows = await listPayments(deps.pool, { businessId: deps.config.businessId, invoiceId: f.invoiceId, status: f.status, limit: f.limit });
-  return rows.map((p) => toPublicPayment(p, deps.config));
+  return rows.map((p) => storedView(p, deps.config));
 }
 /** XRP numeric string ("12.345678") to integer drops with BigInt only (G-4). */
 export function xrpToDrops(xrp: string): string | null {

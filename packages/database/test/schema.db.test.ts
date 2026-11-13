@@ -12,7 +12,7 @@ const createdRoles: string[] = [];
 
 const TABLES = [
   "businesses", "business_members", "treasury_wallets", "balance_snapshots", "suppliers", "invoices",
-  "treasury_policies", "daily_spend_reservations", "payments", "agent_runs", "audit_events", "schema_migrations", "web_credentials", "web_sessions", "login_attempts",
+  "treasury_policies", "daily_spend_reservations", "payments", "agent_runs", "agent_run_events", "agent_run_payment_requests", "audit_events", "schema_migrations", "web_credentials", "web_sessions", "login_attempts",
 ];
 
 beforeAll(async () => {
@@ -50,7 +50,7 @@ describe("migrations", () => {
     try {
       const again = await migrate(c);
       expect(again.applied).toEqual([]);
-      expect(again.skipped.length).toBe(6);
+      expect(again.skipped.length).toBe(8);
     } finally {
       await c.end();
     }
@@ -110,8 +110,8 @@ describe("row-level security (AZ-5)", () => {
       }
     }
   });
-  it("flow_guard has no access to agent_runs, business_members or schema_migrations, and cannot write policies/suppliers/wallets/businesses", async () => {
-    for (const t of ["agent_runs", "business_members", "schema_migrations"]) {
+  it("flow_guard has no access to business_members or schema_migrations, and cannot write policies/suppliers/wallets/businesses", async () => {
+    for (const t of ["business_members", "schema_migrations"]) {
       expect(await sqlState(db.guardPool.query(`SELECT * FROM ${t}`)), t).toBe("42501");
     }
     for (const t of ["treasury_policies", "suppliers", "treasury_wallets", "businesses"]) {
