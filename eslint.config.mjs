@@ -65,7 +65,7 @@ export default tseslint.config(
   },
   {
     // Test doubles implement async interfaces without awaiting, and tests index loosely typed JSON fixtures.
-    files: ["**/test/**/*.ts"],
+    files: ["**/test/**/*.ts", "**/test/**/*.tsx"],
     rules: {
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
