@@ -138,6 +138,14 @@ Residual risks: one shared agent token (no per-run scoping, rotation by `AGENT_T
 | L-4 | Low | `GUARD_HOST` accepts any host; no TLS check. | Deferred to deployment (M6/M7). Partly addressed: a non-loopback host now forces `GUARD_BUSINESS_ID`. |
 | L-5 | Low | Demo timezone note, Windows `child.kill`, stale test count. | Fixed for the note (schema defaults are already ZA / Africa/Johannesburg) and the README count. The Windows `child.kill` behaviour is accepted for the local launcher. |
 
+## Embedded Postgres dev dependency (Docker-free local database)
+
+- `embedded-postgres` 16.15.0-beta.19 is an exact-pinned devDependency of the root package. It pulls in a platform package (`@embedded-postgres/windows-x64` on Windows) that ships prebuilt PostgreSQL binaries. It is for local development and tests only and is never used in any deployment; production data lives in Supabase.
+- Supply chain: the platform package has a `postinstall` script (it only re-creates symlinks, which the Windows build does not need). It is NOT allowed to run: `pnpm-workspace.yaml` lists `'@embedded-postgres/windows-x64': false` under `allowBuilds` and `.npmrc` keeps `ignore-scripts=true`. The only allowed build remains `esbuild`. The repo script resolves the binaries itself and runs `initdb` and `pg_ctl` directly with argument arrays and no shell.
+- Network exposure: the server listens on `127.0.0.1:54329` only (`listen_addresses=127.0.0.1`; the helper refuses any other host), with `scram-sha-256` authentication.
+- Secrets: all passwords are random and live in the gitignored `.secrets/local-db.env`. The bootstrap password goes to `initdb` through a temporary mode-0600 file that is deleted right after, never on the command line, and nothing is printed. Data lives in the gitignored `.local-pg/`.
+- Limits: the PostgreSQL binaries are a third-party build and were not independently verified; the Windows elevated-token check relies on `whoami /groups`.
+
 ## Residual risks and open Low items (before deployment or demo)
 - Compromise of the `flow_web` role is equivalent to owner compromise. The session tables are permissive by design until Supabase Auth replaces the local auth provider in M6.
 - Open Low: `login_attempts` rows are never pruned. Add a pruning job before deployment.

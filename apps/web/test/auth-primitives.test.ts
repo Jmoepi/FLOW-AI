@@ -134,10 +134,22 @@ describe("CSRF (AU-4)", () => {
 });
 describe("client IP", () => {
   const req = (xff?: string): Request => new Request(`${ORIGIN}/api/x`, { headers: xff === undefined ? {} : { "x-forwarded-for": xff } });
-  it("ignores X-Forwarded-For unless the proxy is trusted, and validates it when it is", () => {
-    expect(clientIp(req("1.2.3.4"), false)).toBe("direct");
-    expect(clientIp(req("1.2.3.4, 5.6.7.8"), true)).toBe("1.2.3.4");
-    expect(clientIp(req("not an ip; drop table"), true)).toBe("direct");
-    expect(clientIp(req(), true)).toBe("direct");
+  it("ignores X-Forwarded-For when no proxy is trusted (0 hops)", () => {
+    expect(clientIp(req("1.2.3.4"), 0)).toBe("direct");
+    expect(clientIp(req("1.2.3.4, 5.6.7.8"), 0)).toBe("direct");
+  });
+  it("takes the entry hops places from the right, so a spoofed leftmost entry cannot choose the bucket", () => {
+    expect(clientIp(req("9.9.9.9, 5.6.7.8"), 1)).toBe("5.6.7.8");
+    expect(clientIp(req("6.6.6.6, 9.9.9.9, 5.6.7.8"), 1)).toBe("5.6.7.8");
+    expect(clientIp(req("6.6.6.6, 1.2.3.4, 10.0.0.1"), 2)).toBe("1.2.3.4");
+    expect(clientIp(req("1.2.3.4"), 1)).toBe("1.2.3.4");
+    expect(clientIp(req("2001:db8::1"), 1)).toBe("2001:db8::1");
+  });
+  it("falls back to the shared bucket for a missing, short or malformed header", () => {
+    expect(clientIp(req(), 1)).toBe("direct");
+    expect(clientIp(req("1.2.3.4"), 2)).toBe("direct");
+    expect(clientIp(req("1.2.3.4, not an ip; drop table"), 1)).toBe("direct");
+    expect(clientIp(req("1.2.3.4"), -1)).toBe("direct");
+    expect(clientIp(req("1.2.3.4"), 1.5)).toBe("direct");
   });
 });

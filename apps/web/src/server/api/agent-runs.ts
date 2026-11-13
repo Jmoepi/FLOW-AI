@@ -1,13 +1,10 @@
 import { AgentRunsQuerySchema, redactValue } from "@flow-ai/contracts";
-import { listAgentRunEvents, listAgentRunsForBusiness, withWebTx } from "@flow-ai/database";
-import { jsonResponse } from "../http/errors";
+import { appendAudit, createAgentRunRequest, DbError, listAgentRunEvents, listAgentRunsForBusiness, withWebTx } from "@flow-ai/database";
+import { explorerUrl } from "../../components/explorer";
+import { HttpError, jsonResponse } from "../http/errors";
 import { defineRoute } from "../http/route";
 const PAGE = 20;
-const TX_HASH = /^[0-9A-F]{64}$/;
-/** The link is built only from a validated payment with a canonical 64-hex hash (IN-5); anything else yields no link. */
-export function explorerUrl(status: string | null, txHash: string | null): string | null {
-  return status === "validated" && txHash !== null && TX_HASH.test(txHash) ? `https://testnet.xrpl.org/transactions/${txHash}` : null;
-}
+export { explorerUrl };
 /** Read-only, newest first. Event payloads are re-redacted on the way out; free text is rendered as text by the page. */
 export const agentRunsListRoute = defineRoute({
   method: "GET",
@@ -53,5 +50,38 @@ export const agentRunsListRoute = defineRoute({
     }));
     const last = rows[rows.length - 1];
     return jsonResponse(200, { runs, next_before_seq: rows.length === limit && last !== undefined ? last.seq : null });
+  },
+});
+/**
+ * POST /api/agent-runs. The web process never holds the agent token, so the owner's button only records a request; the
+ * agent claims it through the payment guard and runs under the same rules as any other run. One open request per business.
+ */
+export const agentRunRequestRoute = defineRoute({
+  method: "POST",
+  path: "/api/agent-runs",
+  role: "owner",
+  csrf: "token",
+  handler: async ({ deps, requestId, session }) => {
+    try {
+      const created = await withWebTx(deps.pool, session.businessId, async (c) => {
+        const r = await createAgentRunRequest(c, session.businessId, session.userId);
+        await appendAudit(c, {
+          business_id: session.businessId,
+          actor_type: "human",
+          actor_id: session.userId,
+          event_type: "agent.run_requested",
+          entity_type: "agent_run_request",
+          entity_id: r.id,
+          metadata: {},
+          request_id: requestId,
+        });
+        return r;
+      });
+      deps.logger.info("agent.run_requested", { request_id: requestId });
+      return jsonResponse(202, { status: "requested", request_id: created.id });
+    } catch (err) {
+      if (err instanceof DbError && err.code === "UNIQUE_VIOLATION") throw new HttpError(409, "RUN_REQUESTED", "A run is already requested and waiting for the agent.");
+      throw err;
+    }
   },
 });

@@ -53,3 +53,5 @@ export function fromUtcInput(value: string): string | null {
   const iso = new Date(t).toISOString();
   return iso.startsWith(value) ? `${value}:00.000Z` : null;
 }
+/** A balance snapshot older than this is shown as stale (named constant, no env var). */
+export const BALANCE_STALE_SECONDS = 300;

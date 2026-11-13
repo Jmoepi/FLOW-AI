@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .secrets/
+.local-pg/
 *.seed
 *wallets*.json
 
@@ -38,3 +39,7 @@ npm-debug.log*
 # Local workflow artifacts and reference PDFs
 .agents/
 *.pdf
+
+# Certificates belong in .secrets/, not the repo root
+/*.crt
+/*.cer

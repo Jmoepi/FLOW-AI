@@ -34,6 +34,8 @@ const ENV_ALLOWLIST = ["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "w
 export function baseGuardEnv(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const k of ENV_ALLOWLIST) if (parent[k] !== undefined) env[k] = parent[k];
+  // Path to the public CA certificate for a remote database (not a secret); the child verifies TLS against it.
+  if (parent.DATABASE_SSL_CA_FILE !== undefined && parent.DATABASE_SSL_CA_FILE !== "") env.DATABASE_SSL_CA_FILE = parent.DATABASE_SSL_CA_FILE;
   return env;
 }
 /** Pure: the kill switch is "true" unless the caller passes executionEnabled: false. */

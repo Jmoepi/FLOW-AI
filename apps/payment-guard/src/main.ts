@@ -1,5 +1,5 @@
 import { redactError } from "@flow-ai/contracts";
-import { createPool, getCurrentRoleFlags } from "@flow-ai/database";
+import { createPool, getCurrentRoleFlags, sslCaFileFromEnv } from "@flow-ai/database";
 import { XrplGateway } from "@flow-ai/xrpl-adapter";
 import { buildApp } from "./app";
 import { assertLeastPrivilegeRole, ConfigError, loadConfig } from "./config";
@@ -11,9 +11,13 @@ import { createLogger } from "./logger";
 import { createExecutor } from "./services/execute";
 import type { ServiceDeps } from "./services/payments";
 const logger = createLogger();
+function caOption(env: NodeJS.ProcessEnv): { sslCaFile?: string } {
+  const f = sslCaFileFromEnv(env);
+  return f === undefined ? {} : { sslCaFile: f };
+}
 async function main(): Promise<void> {
   const config = loadConfig(process.env);
-  const pool = createPool({ connectionString: config.databaseUrl, applicationName: "flow-ai-payment-guard", onError: (m) => logger.error("db.pool_error", { error: m }) });
+  const pool = createPool({ connectionString: config.databaseUrl, ...caOption(process.env), applicationName: "flow-ai-payment-guard", onError: (m) => logger.error("db.pool_error", { error: m }) });
   assertLeastPrivilegeRole(await getCurrentRoleFlags(pool));
   const gateway = await XrplGateway.connect(config.network, { wsUrl: config.wsUrl });
   const integrity = createAuditIntegrity({ pool, config, env: () => process.env, logger });

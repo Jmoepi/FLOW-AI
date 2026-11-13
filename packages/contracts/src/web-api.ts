@@ -87,6 +87,18 @@ export const AgentRunsQuerySchema = z.strictObject({
   before_seq: digits(15).pipe(z.number().int().min(1)).optional(),
 });
 export type AgentRunsQuery = z.infer<typeof AgentRunsQuerySchema>;
+export const INVOICE_FILTER_STATUSES = ["draft", "open", "processing", "paid", "blocked", "cancelled"] as const;
+export const PAYMENT_FILTER_STATUSES = ["requested", "blocked", "reserved", "submitted", "pending_confirmation", "validated", "failed", "cancelled"] as const;
+export const InvoicesQuerySchema = z.strictObject({
+  status: z.enum(INVOICE_FILTER_STATUSES).optional(),
+  page: digits(4).pipe(z.number().int().min(1).max(1000)).optional(),
+});
+export type InvoicesQuery = z.infer<typeof InvoicesQuerySchema>;
+export const PaymentsQuerySchema = z.strictObject({
+  status: z.enum(PAYMENT_FILTER_STATUSES).optional(),
+  page: digits(4).pipe(z.number().int().min(1).max(1000)).optional(),
+});
+export type PaymentsQuery = z.infer<typeof PaymentsQuerySchema>;
 export const IdParamsSchema = z.strictObject({ id: z.uuid() });
 // ---------------------------------------------------------------------------------------------------------------------
 // Policy diff

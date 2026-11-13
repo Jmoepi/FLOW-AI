@@ -1,5 +1,5 @@
 import "server-only";
-import { getCurrentRoleFlags, createPool, type Pool } from "@flow-ai/database";
+import { getCurrentRoleFlags, createPool, sslCaFileFromEnv, type Pool } from "@flow-ai/database";
 import { redactError } from "@flow-ai/contracts";
 import { assertLeastPrivilegeRole, loadWebConfig, type WebConfig } from "./config";
 import { createLogger, type Logger } from "./logger";
@@ -13,8 +13,11 @@ let pending: Promise<WebDeps> | undefined;
 function build(): Promise<WebDeps> {
   const logger: Logger = createLogger();
   const config: WebConfig = loadWebConfig(process.env);
+  const caFile = sslCaFileFromEnv(process.env);
+  const caOption = caFile === undefined ? {} : { sslCaFile: caFile };
   const pool: Pool = createPool({
     connectionString: config.databaseUrl,
+    ...caOption,
     applicationName: "flow-ai-web",
     max: 10,
     onError: (m) => logger.error("db.pool_error", { message: m }),

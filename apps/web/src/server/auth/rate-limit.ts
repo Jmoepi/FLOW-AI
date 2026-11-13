@@ -8,11 +8,17 @@ export interface RateDecision {
   allowed: boolean;
   retryAfterSeconds: number;
 }
-/** Client IP: only X-Forwarded-For when explicitly configured to trust the proxy, else one shared bucket. */
-export function clientIp(request: Request, trustProxy: boolean): string {
-  if (!trustProxy) return "direct";
-  const first = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
-  return /^[0-9a-fA-F:.]{3,45}$/.test(first) ? first : "direct";
+const IP_TEXT = /^[0-9a-fA-F:.]{3,45}$/;
+/**
+ * Client IP behind `hops` trusted proxies: each proxy appends the address it saw, so the real client is the entry `hops`
+ * places from the RIGHT. Entries to its left are client-controlled and are ignored (a spoofed leftmost value cannot choose
+ * the bucket). No trusted proxy, a missing or short header, or a malformed entry all fall back to one shared bucket.
+ */
+export function clientIp(request: Request, hops: number): string {
+  if (!Number.isInteger(hops) || hops < 1) return "direct";
+  const parts = (request.headers.get("x-forwarded-for") ?? "").split(",").map((p) => p.trim());
+  const entry = parts.length >= hops ? parts[parts.length - hops] : undefined;
+  return entry !== undefined && IP_TEXT.test(entry) ? entry : "direct";
 }
 /** Counts this login attempt against the email and IP buckets (fixed windows, stored as hashes in Postgres). */
 export async function checkLoginRate(deps: WebDeps, ip: string, email: string): Promise<RateDecision> {

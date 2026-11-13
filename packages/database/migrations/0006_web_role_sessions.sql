@@ -8,7 +8,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'flow_web') THEN
     CREATE ROLE flow_web LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
   END IF;
-  ALTER ROLE flow_web NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
+  ALTER ROLE flow_web NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
+  -- NOSUPERUSER is not part of the ALTER above: hosted Postgres (Supabase) admins are not superusers and may not name it.
+  -- A role created above is already NOSUPERUSER; this undoes a manual escalation and fails loudly if it cannot.
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'flow_web' AND rolsuper) THEN
+    ALTER ROLE flow_web NOSUPERUSER;
+  END IF;
 END
 $$;
 DO $$

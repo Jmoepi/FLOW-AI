@@ -2,7 +2,7 @@ import {
   redactValue, sanitizeText, type AgentRunCreate, type AgentRunEvent, type AgentRunFinish,
 } from "@flow-ai/contracts";
 import {
-  DbError, appendAgentRunEvent, appendAudit, createAgentRun, finishAgentRun, getInvoice, getRunningAgentRunId, interruptAgentRun, listAgentRunPaymentRequests,
+  DbError, claimAgentRunRequest, appendAgentRunEvent, appendAudit, createAgentRun, finishAgentRun, getInvoice, getRunningAgentRunId, interruptAgentRun, listAgentRunPaymentRequests,
   lockAgentRun, lockStaleRunningRuns, recordAgentRunPaymentRequest, withTransaction, type AgentRunPaymentRequestRow, type AgentRunTerminalStatus, type PoolClient,
 } from "@flow-ai/database";
 import { resolveAgentBusinessId } from "./agent-views";
@@ -171,5 +171,18 @@ export async function sweepStaleAgentRuns(deps: ServiceDeps): Promise<number> {
     }
     if (interrupted > 0) deps.logger.info("sweeper.agent_runs_interrupted", { count: interrupted });
     return interrupted;
+  });
+}
+
+/**
+ * POST /internal/run-requests/claim. Atomically takes the oldest fresh owner request (FOR UPDATE SKIP LOCKED) and records it
+ * in the audit trail. Returns the request id or null. The request holds no instruction: the agent runs under the same rules.
+ */
+export async function claimRunRequest(deps: ServiceDeps, businessId: string, requestId: string): Promise<string | null> {
+  return withTransaction(deps.pool, async (c) => {
+    const id = await claimAgentRunRequest(c, businessId);
+    if (id === null) return null;
+    await appendAudit(c, { business_id: businessId, ...SYSTEM, event_type: "agent.run_request_claimed", entity_type: "agent_run_request", entity_id: id, metadata: {}, request_id: requestId });
+    return id;
   });
 }

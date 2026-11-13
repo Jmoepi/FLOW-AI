@@ -7,11 +7,12 @@
     "test": "vitest run",
     "test:db": "vitest run -c vitest.db.config.ts --passWithNoTests",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts --serve"
   },
   "dependencies": {
     "@flow-ai/contracts": "workspace:*",
     "@modelcontextprotocol/sdk": "1.32.2",
+    "tsx": "4.23.15",
     "zod": "4.6.7"
   },
   "devDependencies": {

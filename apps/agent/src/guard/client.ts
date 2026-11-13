@@ -69,9 +69,12 @@ export interface GuardClient {
   createRun(body: AgentRunCreate, signal?: AbortSignal): Promise<{ run_id: string; started_at: string }>;
   appendEvent(runId: string, ev: AgentRunEvent, signal?: AbortSignal): Promise<{ seq: number }>;
   finishRun(runId: string, body: AgentRunFinish, signal?: AbortSignal): Promise<void>;
+  /** Claims the owner's pending "Run treasury agent" request, if any. True means one run should start now. */
+  claimRunRequest(signal?: AbortSignal): Promise<boolean>;
 }
 
 const RunCreatedSchema = z.object({ run_id: z.uuid(), started_at: z.string().max(40) });
+const ClaimSchema = z.object({ request_id: z.uuid() });
 const EventAppendedSchema = z.object({ seq: z.number().int().min(1).max(32) });
 
 interface RequestSpec {
@@ -200,6 +203,11 @@ export function createGuardClient(opts: GuardClientOptions): GuardClient {
     },
     async appendEvent(runId, ev, signal) {
       return parse(EventAppendedSchema, await post(`/internal/agent-runs/${encodeURIComponent(runId)}/events`, ev, writeMs, signal));
+    },
+    async claimRunRequest(signal) {
+      // 200 {request_id} when claimed, 204 (no body) when nothing is open. The request id carries no instruction.
+      const json = await post("/internal/run-requests/claim", undefined, writeMs, signal);
+      return parse(ClaimSchema.nullable(), json) !== null;
     },
     async finishRun(runId, body, signal) {
       await post(`/internal/agent-runs/${encodeURIComponent(runId)}/finish`, body, writeMs, signal);

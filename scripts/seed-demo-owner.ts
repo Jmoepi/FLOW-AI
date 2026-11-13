@@ -1,8 +1,9 @@
 /**
- * Seeds the local demo business (if missing) and one owner login for the web app. Local Docker Postgres only.
- * Usage: pnpm db:seed:demo [-- --reset-password] [--balance <decimal>]
+ * Seeds the demo business (if missing) and one owner login for the web app. Local Postgres by default; with --supabase the
+ * hosted Supabase database from DATABASE_URL (verified TLS, CA file) and the owner file .secrets/web-owner.supabase.env.
+ * Usage: pnpm db:seed:demo [-- --reset-password] [--balance <decimal>] [--supabase]
  *
- * - Connects as the local admin from .secrets/local-db.env and refuses any non-loopback host. No Testnet contact.
+ * - Local: connects as the local admin from .secrets/local-db.env and refuses any non-loopback host. No Testnet contact.
  * - Owner email: DEMO_OWNER_EMAIL (env or gitignored .env), default owner@demo.flow-ai.test.
  * - Owner password: DEMO_OWNER_PASSWORD (env), else DEMO_OWNER_PASSWORD in .secrets/web-owner.env, else a random one is
  *   generated into that file (mode 0600). The value is never printed; only the file path is.
@@ -13,6 +14,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import path from "node:path";
 import {
   DEMO_BUSINESS_NAME,
+  assertMigrationTarget,
   LOCAL_DB,
   addBusinessMember,
   createCredential,
@@ -28,8 +30,10 @@ import {
 } from "../packages/database/src/index";
 import { hashPassword, isAcceptablePassword } from "../apps/web/src/server/auth/password";
 import { SECRETS_DIR, loadConfig, readPublicWallets, toErrorMessage } from "./lib/common";
+import { loadSupabaseTarget } from "./lib/supabase";
 
-const OWNER_FILE = path.join(SECRETS_DIR, "web-owner.env");
+const SUPABASE_MODE = process.argv.includes("--supabase");
+const OWNER_FILE = path.join(SECRETS_DIR, SUPABASE_MODE ? "web-owner.supabase.env" : "web-owner.env");
 const DEFAULT_EMAIL = "owner@demo.flow-ai.test";
 function isEmail(v: string): boolean {
   const at = v.indexOf("@");
@@ -42,22 +46,25 @@ const BALANCE_RE = /^[0-9]{1,9}$|^[0-9]{1,9}\.[0-9]{1,6}$/;
 interface Args {
   resetPassword: boolean;
   balance: string;
+  supabase: boolean;
 }
 
 function parseArgs(argv: readonly string[]): Args {
   const args = argv.filter((a) => a !== "--");
   let resetPassword = false;
   let balance = DEFAULT_BALANCE;
+  let supabase = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--reset-password") resetPassword = true;
+    else if (a === "--supabase") supabase = true;
     else if (a === "--balance") {
       const v = args[++i];
       if (v === undefined || !BALANCE_RE.test(v) || Number(v) <= 0) throw new Error("--balance needs a positive decimal such as 10");
       balance = v;
-    } else throw new Error("Usage: db:seed:demo [--reset-password] [--balance <decimal>]");
+    } else throw new Error("Usage: db:seed:demo [--reset-password] [--balance <decimal>] [--supabase]");
   }
-  return { resetPassword, balance };
+  return { resetPassword, balance, supabase };
 }
 
 /** Reads KEY=value lines from the owner file. Values are returned to the caller only; never printed. */
@@ -105,12 +112,20 @@ function resolveOwner(forceNew: boolean): OwnerLogin {
 }
 
 async function main(): Promise<void> {
-  const { resetPassword, balance } = parseArgs(process.argv.slice(2));
-  const secrets = loadLocalDbSecrets(SECRETS_DIR, false);
-  if (secrets === null) throw new Error("No local database set up. Run: pnpm db:up && pnpm db:migrate");
-  const config = localAdminConfig(secrets);
-  if (config.host !== LOCAL_DB.host) throw new Error("Refusing: the demo seed only runs against the loopback database.");
-  const pool = createPool({ config: { host: config.host, port: config.port, user: config.user, password: config.password, database: config.database }, max: 2, applicationName: "flow-ai-seed" });
+  const { resetPassword, balance, supabase } = parseArgs(process.argv.slice(2));
+  let pool: ReturnType<typeof createPool>;
+  if (supabase) {
+    const target = loadSupabaseTarget();
+    const url = process.env.DATABASE_URL as string;
+    assertMigrationTarget(url, true, true);
+    pool = createPool({ connectionString: url, sslCaFile: target.caFile, max: 2, applicationName: "flow-ai-seed" });
+  } else {
+    const secrets = loadLocalDbSecrets(SECRETS_DIR, false);
+    if (secrets === null) throw new Error("No local database set up. Run: pnpm db:up && pnpm db:migrate");
+    const config = localAdminConfig(secrets);
+    if (config.host !== LOCAL_DB.host) throw new Error("Refusing: the demo seed only runs against the loopback database.");
+    pool = createPool({ config: { host: config.host, port: config.port, user: config.user, password: config.password, database: config.database }, max: 2, applicationName: "flow-ai-seed" });
+  }
   try {
     let businessId = (await findBusinessIdByName(pool, DEMO_BUSINESS_NAME)) ?? undefined;
     let businessCreated = false;

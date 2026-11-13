@@ -1,8 +1,11 @@
 import type { Route } from "../http/route";
-import { agentRunsListRoute } from "./agent-runs";
+import { agentRunRequestRoute, agentRunsListRoute } from "./agent-runs";
 import { auditListRoute } from "./audit";
+import { healthzRoute, readyzRoute } from "./health";
+import { invoiceGetRoute, invoicesListRoute } from "./invoices";
 import { loginRoute, logoutRoute, sessionRoute } from "./auth";
 import { overviewRoute } from "./overview";
+import { paymentGetRoute, paymentsListRoute } from "./payments";
 import { policyGetRoute, policyPutRoute } from "./policy";
 import { supplierPatchRoute, suppliersListRoute } from "./suppliers";
 /**
@@ -20,5 +23,12 @@ export const routes = {
   auditList: auditListRoute,
   agentRunsList: agentRunsListRoute,
   overview: overviewRoute,
+  agentRunRequest: agentRunRequestRoute,
+  invoicesList: invoicesListRoute,
+  invoiceGet: invoiceGetRoute,
+  paymentsList: paymentsListRoute,
+  paymentGet: paymentGetRoute,
+  healthz: healthzRoute,
+  readyz: readyzRoute,
 } as const satisfies Record<string, Route>;
 export const routeList: readonly Route[] = Object.values(routes);

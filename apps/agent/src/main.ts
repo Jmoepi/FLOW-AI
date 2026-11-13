@@ -14,6 +14,7 @@ import { runAgent } from "./run/run-agent";
 import { TranscriptError, writeTranscript } from "./run/transcript";
 import type { Brain, RunResult } from "./run/types";
 import { createScheduler } from "./scheduler";
+import { createHealthServer, createServeLoop, loadServeSettings, type ServeSettings } from "./serve";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const log = createLogger();
@@ -49,9 +50,49 @@ async function runOnce(config: AgentConfig, args: CliArgs, signal: AbortSignal):
   }
 }
 
+/**
+ * Service mode (`pnpm start`): poll the guard for the owner's "Run treasury agent" requests and answer a health probe.
+ * The interval trigger runs too when AGENT_SCHEDULE_INTERVAL_MINUTES is set. Runs never overlap.
+ */
+async function serve(config: AgentConfig, args: CliArgs, settings: ServeSettings, stop: AbortController): Promise<number> {
+  const guard = createGuardClient({ baseUrl: config.guardUrl, token: config.token, logger: log });
+  const loop = createServeLoop({
+    pollMs: settings.pollSeconds * 1000,
+    claim: (signal) => guard.claimRunRequest(signal),
+    runOnce: async (trigger, signal) => {
+      const result = await runOnce(config, { ...args, trigger }, signal);
+      process.stdout.write(`${formatSummary(result)}\n`);
+    },
+    onError: (err) => log.error("agent.serve_error", { error: redactError(err) }),
+  });
+  const health = createHealthServer(() => ({ last_poll_at: loop.lastPollAt(), busy: loop.isBusy() }));
+  await new Promise<void>((resolve, reject) => {
+    health.once("error", reject);
+    health.listen(settings.healthPort, settings.healthHost, () => resolve());
+  });
+  const scheduler =
+    config.scheduleIntervalMinutes === null
+      ? null
+      : createScheduler({
+          intervalMinutes: config.scheduleIntervalMinutes,
+          runImmediately: false,
+          runOnce: async () => {
+            if (!(await loop.runInterval())) log.warn("agent.tick_skipped", { reason: "a run is already active" });
+          },
+          onError: (err) => log.error("agent.run_error", { error: redactError(err) }),
+        });
+  scheduler?.start();
+  log.info("agent.serving", { poll_seconds: settings.pollSeconds, health_port: settings.healthPort, interval_minutes: config.scheduleIntervalMinutes });
+  stop.signal.addEventListener("abort", () => loop.stop(), { once: true });
+  await loop.start();
+  await scheduler?.stop();
+  await new Promise<void>((resolve) => health.close(() => resolve()));
+  return 0;
+}
 async function main(): Promise<number> {
   let args: CliArgs;
   let config: AgentConfig;
+  let serveSettings: ServeSettings | null = null;
   try {
     args = parseCliArgs(process.argv.slice(2));
     config = loadAgentConfig(process.env);
@@ -59,6 +100,8 @@ async function main(): Promise<number> {
     buildBrain(config);
     if (typeof args.record === "string") throw new AgentConfigError("--record takes no path; transcripts are written under docs/demo/.");
     if (args.record !== null && args.schedule) throw new AgentConfigError("--record cannot be combined with --schedule.");
+    if (args.serve === true && (args.record !== null || args.schedule)) throw new AgentConfigError("--serve cannot be combined with --record or --schedule (the interval is set by AGENT_SCHEDULE_INTERVAL_MINUTES).");
+    if (args.serve === true) serveSettings = loadServeSettings(process.env);
     if (args.schedule && config.scheduleIntervalMinutes === null) {
       throw new AgentConfigError("AGENT_SCHEDULE_INTERVAL_MINUTES is empty; scheduling is disabled.");
     }
@@ -72,6 +115,7 @@ async function main(): Promise<number> {
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
 
+  if (serveSettings !== null) return serve(config, args, serveSettings, stop);
   if (!args.schedule) {
     const result = await runOnce(config, args, stop.signal).catch((err: unknown) => {
       log.error("agent.run_error", { error: redactError(err) });
