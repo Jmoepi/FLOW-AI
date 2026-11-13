@@ -63,7 +63,45 @@ pnpm install
 cp .env.example .env        # fill in values; .env is gitignored
 ```
 
-Local development: the full stack runs on a local Docker Postgres. Run `pnpm db:up`, `pnpm db:migrate -- --local`, `pnpm db:seed:demo`, then `pnpm guard:dev` and `pnpm dev:web`. See [docs/local-dev.md](docs/local-dev.md). Supabase hosting is deferred: the migrations have not been applied to a hosted project (see [docs/supabase-runbook.md](docs/supabase-runbook.md)).
+Local development: the full stack runs on a local Postgres, with Docker or without it (see "Run locally without Docker" below). With Docker, run `pnpm db:up`, `pnpm db:migrate -- --local`, `pnpm db:seed:demo`, then `pnpm guard:dev` and `pnpm dev:web`. See [docs/local-dev.md](docs/local-dev.md). Supabase hosting is deferred: the migrations have not been applied to a hosted project (see [docs/supabase-runbook.md](docs/supabase-runbook.md)).
+
+## Run locally without Docker
+
+Everything runs from the terminal on your machine with an embedded PostgreSQL 16 (the `embedded-postgres` dev dependency). No Docker, no Supabase, no remote database. It uses the same roles, database name, port and `.secrets/local-db.env` as the Docker path, so every command below is the same either way.
+
+Prerequisites: Node 20.19 or newer (verified on 24.17.0), pnpm 11.8.0, Windows x64, Linux or macOS. Use a normal, non-elevated terminal: PostgreSQL refuses to run with administrator or root rights. First-time setup also needs `.secrets/testnet-wallets.json` (`pnpm setup:testnet-accounts`, Testnet only) because the guard launcher reads the signer from it.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm db:up:native            # first run creates .local-pg/ (gitignored); idempotent
+pnpm db:migrate --local      # applies migrations 0001 to 0008; a second run is a no-op
+pnpm db:seed:demo            # demo business, suppliers, invoices and the owner login
+```
+
+Then start the two servers, each in its own terminal (three terminals in total with this one):
+
+```bash
+pnpm guard:dev               # terminal 2: payment guard on http://127.0.0.1:4002 (kill switch OFF)
+pnpm dev:web                 # terminal 3: web app on http://127.0.0.1:3000
+```
+
+Open http://127.0.0.1:3000/login. The owner email is `owner@demo.flow-ai.test` and the password is the `DEMO_OWNER_PASSWORD` line in `.secrets/web-owner.env` (open the file; it is never printed). Check the guard with `curl http://127.0.0.1:4002/readyz`.
+
+Run the agent (guard must be running; deterministic mode needs no key): `pnpm agent:run`. For a recorded blocked request, `pnpm agent:demo -- --blocked-only` starts its own guard with execution disabled and submits nothing.
+
+Tests: `pnpm test` needs no database. For the database tests against the embedded Postgres: `FLOW_TEST_DB=native pnpm test:db` (bash) or `$env:FLOW_TEST_DB="native"; pnpm test:db` (PowerShell). The variable only changes the hint shown when the database is unreachable.
+
+Stop: Ctrl+C in the guard and web terminals, then `pnpm db:down:native`. Data stays in `.local-pg/` and persists across restarts. `pnpm db:status:native` shows whether it is up. To wipe all native local data: `pnpm db:reset:native -- --yes` (keeps `.secrets/local-db.env`).
+
+Troubleshooting:
+
+- Port 54329 in use: another Postgres or the Docker database is running. Stop it (`pnpm db:down`) and retry. The server listens on `127.0.0.1` only (use that, not `localhost`, if IPv6 resolution gives trouble).
+- "running as Administrator": open a non-elevated terminal.
+- Windows antivirus or firewall: allow `postgres.exe` under `node_modules/.pnpm/@embedded-postgres*`; loopback traffic only is needed. If the binaries were quarantined, re-run `pnpm install --frozen-lockfile`.
+- Stale lock file after a crash: run `pnpm db:down:native` then `pnpm db:up:native`; check `.local-pg/postgres.log`. As a last resort, `pnpm db:reset:native -- --yes`.
+- `.local-pg/` exists but `.secrets/local-db.env` is missing: the password is unknown; reset (above) and start again.
+
+Safety: the payment kill switch is OFF by default (no payment can execute), this is XRPL Testnet only, and `.env` and `.secrets/` are gitignored and must never be committed. Supabase is not touched by any of these commands. Docker is still supported as the alternative: `pnpm db:up` instead of `pnpm db:up:native`, then the same commands. Details: [docs/local-dev.md](docs/local-dev.md).
 
 Scripts:
 
@@ -72,6 +110,7 @@ Scripts:
 - `pnpm preflight`: read-only check of network, issuer, currency hex, reserves, trust lines and treasury RLUSD balance. It exits non-zero (2, BLOCKED) when the treasury holds no RLUSD.
 - `pnpm m1:send -- --dry-run` / `pnpm m1:send -- --to domestic`: M1 sender. Sends 1 RLUSD (hard cap 2, treasury keeps at least 5, at most 2 real payments, Testnet only), logs to the gitignored `.secrets/m1-transactions.json`, prints the validated hash and explorer URL, and proves the balance delta.
 - `pnpm db:up` / `pnpm db:down` / `pnpm db:status`: start, stop and check the local Postgres in Docker (loopback only, port 54329). Passwords are generated into the gitignored `.secrets/local-db.env` and never printed. Docker Desktop must be running. Without the script: `docker compose -f docker-compose.local-db.yml up -d --wait` needs `FLOW_LOCAL_PG_PASSWORD` set, so prefer `pnpm db:up`.
+- `pnpm db:up:native` / `db:down:native` / `db:status:native` / `db:reset:native -- --yes`: the same local Postgres without Docker (embedded-postgres binaries, data in `.local-pg/`).
 - `pnpm db:migrate [status]`: applies the SQL migrations to the local database (a non-local `DATABASE_URL` needs `--allow-remote` and TLS).
 - `pnpm test:db`: database and guard integration tests against the local Docker Postgres (each run uses a throwaway database).
 - `pnpm guard:dev`: starts the payment guard on 127.0.0.1:4002 (Testnet). The signer seed is read from `.secrets` by the launcher and handed to the guard through its environment in memory; the agent token is random per launch.

@@ -1,6 +1,6 @@
-# Local development stack (Docker Postgres, no Supabase)
+# Local development stack (Docker or embedded Postgres, no Supabase)
 
-Everything here runs on your machine. Nothing contacts Supabase or any remote database, and no secret is stored in a tracked file. Docker Desktop must be running.
+Everything here runs on your machine. Nothing contacts Supabase or any remote database, and no secret is stored in a tracked file. Use either Docker Desktop (`pnpm db:up`) or, without Docker, the embedded Postgres (`pnpm db:up:native`, data in the gitignored `.local-pg/`). Both use port 54329 and the same `.secrets/local-db.env`, so run only one at a time. Step-by-step instructions for the Docker-free path are in the README section "Run locally without Docker".
 
 ## Files (all gitignored, created by the scripts, never printed)
 | File | Created by | Holds |
@@ -15,7 +15,7 @@ The launchers assemble database URLs, the session settings and the other variabl
 ## Start (three terminals, from the repo root)
 ```bash
 # 1. Database (idempotent) and migrations, local only
-pnpm db:up
+pnpm db:up                   # or, without Docker: pnpm db:up:native
 pnpm db:migrate --local
 pnpm db:seed:demo            # demo business, 3 suppliers, 5 invoices, owner login; re-running is a no-op
 
@@ -38,4 +38,4 @@ pnpm db:migrate status --local          # applied: 6, pending: none
 With the kill switch off, the guard's eligibility preview (`GET /internal/invoices/:id/eligibility`, bearer token from `.secrets/guard-dev.env`) always lists `EXECUTION_DISABLED`; lowering the per-payment cap in the policy page adds `PAYMENT_LIMIT_EXCEEDED` for invoices above the new cap.
 
 ## Stop
-Press Ctrl+C in the guard and web terminals. The database keeps running; `pnpm db:down` stops it (data stays in the Docker volume).
+Press Ctrl+C in the guard and web terminals. The database keeps running; `pnpm db:down` stops the Docker one (data stays in the Docker volume); `pnpm db:down:native` stops the embedded one (data stays in `.local-pg/`; `pnpm db:reset:native -- --yes` wipes it). Database tests without Docker: `FLOW_TEST_DB=native pnpm test:db`.
