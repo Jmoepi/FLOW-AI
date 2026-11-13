@@ -24,7 +24,9 @@
     "db:status": "tsx scripts/db-local.ts status",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "guard:dev": "tsx scripts/guard-dev.ts",
-    "m3:e2e": "tsx scripts/m3-e2e.ts"
+    "m3:e2e": "tsx scripts/m3-e2e.ts",
+    "dev:web": "pnpm --filter @flow-ai/web dev",
+    "db:seed:demo": "tsx scripts/seed-demo-owner.ts"
   },
   "dependencies": {
     "dotenv": "18.0.10",

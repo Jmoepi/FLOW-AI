@@ -106,7 +106,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
   const db = await createTestDatabase();
   const wallet = Wallet.generate();
   const supplierAddress = Wallet.generate().address;
-  const env: NodeJS.ProcessEnv = { PAYMENT_EXECUTION_ENABLED: "true", XRPL_DEMO_SIGNER_SEED: wallet.seed };
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PAYMENT_EXECUTION_ENABLED: "true", XRPL_DEMO_SIGNER_SEED: wallet.seed };
   const ledger = new FakeLedger(() => wallet.address);
   const logs: string[] = [];
   const bodies: string[] = [];

@@ -12,7 +12,7 @@ const createdRoles: string[] = [];
 
 const TABLES = [
   "businesses", "business_members", "treasury_wallets", "balance_snapshots", "suppliers", "invoices",
-  "treasury_policies", "daily_spend_reservations", "payments", "agent_runs", "audit_events", "schema_migrations",
+  "treasury_policies", "daily_spend_reservations", "payments", "agent_runs", "audit_events", "schema_migrations", "web_credentials", "web_sessions", "login_attempts",
 ];
 
 beforeAll(async () => {
@@ -50,7 +50,7 @@ describe("migrations", () => {
     try {
       const again = await migrate(c);
       expect(again.applied).toEqual([]);
-      expect(again.skipped.length).toBe(5);
+      expect(again.skipped.length).toBe(6);
     } finally {
       await c.end();
     }

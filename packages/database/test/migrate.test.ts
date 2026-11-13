@@ -67,7 +67,7 @@ describe("parseMigrateArgs", () => {
 describe("loadMigrations", () => {
   const files = loadMigrations();
   it("loads the ordered set with stable sha256 checksums", () => {
-    expect(files.map((f) => f.version)).toEqual(["0001", "0002", "0003", "0004", "0005"]);
+    expect(files.map((f) => f.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006"]);
     for (const f of files) expect(f.checksum).toMatch(/^[0-9a-f]{64}$/);
     expect(loadMigrations().map((f) => f.checksum)).toEqual(files.map((f) => f.checksum));
   });
@@ -80,7 +80,7 @@ describe("loadMigrations", () => {
   it("enables and forces RLS for every created table", () => {
     const all = files.map((f) => f.sql).join("\n");
     const tables = [...all.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
-    expect(tables.length).toBe(11);
+    expect(tables.length).toBe(14);
     for (const t of tables) expect(all).toContain(`'${t}'`);
     expect(all).toContain("FORCE ROW LEVEL SECURITY");
   });
