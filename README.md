@@ -11,7 +11,7 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M0 | Preflight: repo, strict TypeScript, env template, secret scan, Testnet accounts, trust lines | Done. RLUSD claimed; `pnpm preflight` passes (see `docs/m0-notes.md`) |
 | M1 | One real RLUSD payment from a script | Done. 2 validated `tesSUCCESS` payments of 1 RLUSD (cross-border and domestic suppliers) with exact balance deltas; see `docs/m1-notes.md` |
 | M2 | Pure policy engine | Done. 169 tests in 5 files (per `docs/m2-notes.md`) |
-| M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard, plus a blocked request and a duplicate request; see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
+| M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Tests: 419 in `pnpm test` (contracts 49, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 118) and 98 in `pnpm test:db`; see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
 | M4 | Owner policy API and page, audit events | Not started |
 | M5 | Agent plus MCP tools | Not started |
 | M6 | Dashboard screens and deployed URL | Not started |
