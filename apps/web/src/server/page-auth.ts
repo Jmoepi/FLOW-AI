@@ -1,6 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { SessionContext } from "./auth/provider";
 import { getSessionContext } from "./auth/session";
 import { getDeps } from "./db";
@@ -26,6 +26,7 @@ export async function requireOwner(): Promise<OwnerPage> {
   const load = async <T,>(route: Route, pathAndQuery: string): Promise<T> => {
     const res = await route.run(deps, make(pathAndQuery));
     if (res.status === 401 || res.status === 403) redirect("/login");
+    if (res.status === 404) notFound();
     if (!res.ok) throw new Error(`Could not load ${route.path}`);
     return (await res.json()) as T;
   };

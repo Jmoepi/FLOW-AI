@@ -17,11 +17,29 @@ describe("route table (AZ-1)", () => {
       if (r.method !== "GET" && r.role !== "public") expect(r.csrf).toBe("token");
     }
   });
-  it("only login is public, and the policy, supplier, audit, agent and overview routes are owner-only", () => {
-    expect(routeList.filter((r) => r.role === "public").map((r) => r.path)).toEqual(["/api/auth/login"]);
+  it("only login and the two health probes are public, and every dashboard route is owner-only", () => {
+    expect(routeList.filter((r) => r.role === "public").map((r) => r.path).sort()).toEqual(["/api/auth/login", "/api/healthz", "/api/readyz"]);
+    for (const r of [routes.healthz, routes.readyz]) expect(r.method).toBe("GET");
+    expect(routes.healthz.liveness).toBe(true);
+    expect(routes.readyz.liveness).toBe(false);
+    for (const r of [routes.invoicesList, routes.invoiceGet, routes.paymentsList, routes.paymentGet]) {
+      expect(r.role).toBe("owner");
+      expect(r.method).toBe("GET");
+    }
+    expect(routes.agentRunRequest.role).toBe("owner");
+    expect(routes.agentRunRequest.csrf).toBe("token");
     for (const r of [routes.policyGet, routes.policyPut, routes.suppliersList, routes.supplierPatch, routes.auditList, routes.agentRunsList, routes.overview]) expect(r.role).toBe("owner");
     expect(routes.session.role).toBe("member");
     expect(routes.logout.role).toBe("member");
+  });
+  it("there is no CSV export route and no finance-operator role (cut for the MVP, spec 3.4 and 4.2)", () => {
+    expect(routeList.some((r) => /export|csv|operator/i.test(r.path))).toBe(false);
+    const roles = new Set(routeList.map((r) => r.role));
+    expect([...roles].sort()).toEqual(["member", "owner", "public"]);
+  });
+  it("a liveness probe can only be a public GET", () => {
+    const handler = () => Promise.resolve(new Response());
+    expect(() => defineRoute({ method: "GET", path: "/api/x", role: "owner", liveness: true, handler })).toThrow(/liveness/);
   });
   it("no two routes share a method and path", () => {
     const keys = routeList.map((r) => `${r.method} ${r.path}`);

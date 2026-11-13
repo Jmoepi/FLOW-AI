@@ -1,12 +1,14 @@
 import { AgentTriggerSchema, sanitizeText, type AgentTrigger } from "@flow-ai/contracts";
 import type { RunResult } from "./run/types";
 
-export const USAGE = "Usage: agent [--trigger manual|interval] [--probe-ineligible] [--schedule] [--record [path]]";
+export const USAGE = "Usage: agent [--trigger manual|interval] [--probe-ineligible] [--schedule] [--serve] [--record [path]]";
 
 export interface CliArgs {
   trigger: AgentTrigger;
   probeIneligible: boolean;
   schedule: boolean;
+  /** Long-running service: claim owner run requests from the payment guard and answer a health probe. */
+  serve?: boolean;
   /** `true` for a bare --record, a string for --record <path>, null when absent. */
   record: string | true | null;
 }
@@ -31,6 +33,9 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
         break;
       case "--schedule":
         out.schedule = true;
+        break;
+      case "--serve":
+        out.serve = true;
         break;
       case "--trigger": {
         const v = AgentTriggerSchema.safeParse(args[++i]);

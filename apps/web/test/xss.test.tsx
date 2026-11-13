@@ -7,10 +7,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentActivityView } from "../src/components/AgentActivityView";
 import { AuditView } from "../src/components/AuditView";
 import { describeMetadata } from "../src/components/audit-format";
+import { InvoiceDetailView } from "../src/components/InvoiceDetailView";
+import { PaymentDetailView } from "../src/components/PaymentDetailView";
 import { OverviewView } from "../src/components/OverviewView";
 import { Shell } from "../src/components/Shell";
 import { SuppliersView } from "../src/components/SuppliersView";
-import { AGENT_RUNS, AUDIT, HASH, OVERVIEW, SUPPLIERS } from "./ui-fixtures";
+import { AGENT_RUNS, AUDIT, HASH, INVOICE_OPEN, OVERVIEW, PAYMENT_PAID, POLICY, SUPPLIERS } from "./ui-fixtures";
 afterEach(cleanup);
 const HOSTILE = ['<img src=x onerror="alert(1)">', '"><script>alert(1)</script>', "javascript:alert(1)", "<svg onload=alert(1)>", "</td><td><b>x</b>"];
 // Elements that would exist only if hostile text had been parsed as markup.
@@ -43,7 +45,7 @@ describe("hostile text is rendered as text, never as markup", () => {
     const data = { ...OVERVIEW, business: { name: evil, timezone: "UTC" } };
     const { container } = render(
       <Shell businessName={evil} current="overview">
-        <OverviewView data={data} />
+        <OverviewView data={data} policy={POLICY} />
       </Shell>,
     );
     expect(container.querySelectorAll(INJECTED)).toHaveLength(0);
@@ -91,5 +93,29 @@ describe("agent activity renders agent text as text only", () => {
     const html = renderToString(<AgentActivityView page={withRun({ agent_reason: REASON })} timezone="UTC" />);
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+describe("invoices and payments render untrusted text as text only", () => {
+  it.each(HOSTILE)("invoice description, number and supplier: %s", (evil) => {
+    const invoice = { ...INVOICE_OPEN, description: evil, invoice_number: evil, supplier_name: evil, blocked_code: evil, status: "blocked" };
+    const { container } = render(<InvoiceDetailView invoice={invoice} today="2026-01-15" />);
+    expect(container.querySelectorAll(INJECTED)).toHaveLength(0);
+    for (const el of container.querySelectorAll("a")) expect(el.getAttribute("href") ?? "").not.toMatch(/^javascript/i);
+  });
+  it.each(HOSTILE)("payment failure message, reason and code: %s", (evil) => {
+    const payment = { ...PAYMENT_PAID, status: "failed", failure_message: evil, agent_reason: evil, failure_code: evil, invoice_number: evil, supplier_name: evil };
+    const { container } = render(<PaymentDetailView payment={payment} timezone="UTC" />);
+    expect(container.querySelectorAll(INJECTED)).toHaveLength(0);
+  });
+  it("the only external link is the server-built explorer URL", () => {
+    const { container } = render(<PaymentDetailView payment={PAYMENT_PAID} timezone="UTC" />);
+    const external = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "").filter((h) => h.startsWith("http"));
+    expect(external).toEqual([`https://testnet.xrpl.org/transactions/${HASH}`]);
+  });
+  it("no explorer link without a server-built URL, and a pending hash is not described as paid", () => {
+    const { container } = render(<PaymentDetailView payment={{ ...PAYMENT_PAID, status: "pending_confirmation", explorer_url: null }} timezone="UTC" />);
+    expect([...container.querySelectorAll("a")].filter((a) => (a.getAttribute("href") ?? "").startsWith("http"))).toHaveLength(0);
+    expect(container.textContent).toContain("Not yet confirmed on the ledger");
+    expect(container.textContent).not.toMatch(/\bPaid\b/);
   });
 });

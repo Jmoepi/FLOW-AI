@@ -1,6 +1,6 @@
 # Supabase runbook
 
-Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0008, app roles, demo seed, smoke test). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
+Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0008 verified there; 0009 and 0010 are new in M6 and still to be applied by the owner with `pnpm db:migrate --allow-remote`, app roles, demo seed, smoke test). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
 
 ## Verified procedure (run against the real project, session pooler)
 

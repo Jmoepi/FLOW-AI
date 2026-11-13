@@ -19,7 +19,7 @@ describe("loadWebConfig", () => {
     expect(c.sessionAbsoluteSeconds).toBe(28_800);
     expect(c.stepUpSeconds).toBe(900);
     expect(c.cookieSecure).toBe(false);
-    expect(c.trustProxy).toBe(false);
+    expect(c.trustedProxyHops).toBe(0);
   });
   it("fails closed on each missing required variable, naming only the variable", () => {
     for (const name of ["WEB_DATABASE_URL", "APP_BASE_URL", "RLUSD_ISSUER", "RLUSD_CURRENCY_HEX"]) {
@@ -44,6 +44,17 @@ describe("loadWebConfig", () => {
     expect(fieldsOf(validEnv({ WEB_DATABASE_URL: "mysql://x" }))).toContain("WEB_DATABASE_URL");
     expect(fieldsOf(validEnv({ RLUSD_CURRENCY_HEX: "524c555344" }))).toContain("RLUSD_CURRENCY_HEX");
     expect(fieldsOf(validEnv({ WEB_TRUST_PROXY: "yes" }))).toContain("WEB_TRUST_PROXY");
+  });
+  it("reads the trusted proxy hop count, with WEB_TRUST_PROXY=true as an alias for one hop", () => {
+    expect(loadWebConfig(validEnv({ WEB_TRUSTED_PROXY_HOPS: "2" })).trustedProxyHops).toBe(2);
+    expect(loadWebConfig(validEnv({ WEB_TRUST_PROXY: "true" })).trustedProxyHops).toBe(1);
+    expect(loadWebConfig(validEnv({ WEB_TRUST_PROXY: "true", WEB_TRUSTED_PROXY_HOPS: "1" })).trustedProxyHops).toBe(1);
+    expect(loadWebConfig(validEnv({ WEB_TRUST_PROXY: "false", WEB_TRUSTED_PROXY_HOPS: "0" })).trustedProxyHops).toBe(0);
+  });
+  it("rejects a bad or conflicting proxy setting, naming only the variable", () => {
+    for (const v of ["6", "-1", "x", "1.5", "01"]) expect(fieldsOf(validEnv({ WEB_TRUSTED_PROXY_HOPS: v })), v).toContain("WEB_TRUSTED_PROXY_HOPS");
+    expect(fieldsOf(validEnv({ WEB_TRUST_PROXY: "true", WEB_TRUSTED_PROXY_HOPS: "2" }))).toContain("WEB_TRUSTED_PROXY_HOPS");
+    expect(fieldsOf(validEnv({ WEB_TRUST_PROXY: "false", WEB_TRUSTED_PROXY_HOPS: "1" }))).toContain("WEB_TRUSTED_PROXY_HOPS");
   });
   it("refuses the Mainnet RLUSD issuer", () => {
     expect(fieldsOf(validEnv({ RLUSD_ISSUER: MAINNET_RLUSD_ISSUER }))).toContain("RLUSD_ISSUER");

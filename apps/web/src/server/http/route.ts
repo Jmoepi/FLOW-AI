@@ -34,6 +34,8 @@ export interface RouteDef<R extends RouteRole, B, Q, P> {
   path: string;
   role: R;
   csrf?: CsrfMode;
+  /** Liveness probe: answered without touching the database or any dependency (see next-handler). */
+  liveness?: boolean;
   body?: ZodType<B>;
   query?: ZodType<Q>;
   params?: ZodType<P>;
@@ -44,6 +46,7 @@ export interface Route {
   path: string;
   role: RouteRole;
   csrf: CsrfMode;
+  liveness: boolean;
   run: (deps: WebDeps, request: Request, rawParams?: Record<string, string | string[] | undefined>) => Promise<Response>;
 }
 export function defineRoute<R extends RouteRole, B = undefined, Q = undefined, P = undefined>(def: RouteDef<R, B, Q, P>): Route {
@@ -64,7 +67,8 @@ export function defineRoute<R extends RouteRole, B = undefined, Q = undefined, P
       return finish(errorResponse(err, requestId, deps.logger), requestId);
     }
   };
-  return { method: def.method, path: def.path, role: def.role, csrf, run };
+  if (def.liveness === true && (def.role !== "public" || def.method !== "GET")) throw new Error(`route ${def.path}: only a public GET can be a liveness probe`);
+  return { method: def.method, path: def.path, role: def.role, csrf, liveness: def.liveness === true, run };
 }
 function finish(response: Response, requestId: string): Response {
   const headers = new Headers(response.headers);
@@ -127,7 +131,7 @@ async function pipeline<R extends RouteRole, B, Q, P>(
     body: body as B,
     query: query.value as Q,
     params: params as P,
-    ip: clientIp(request, deps.config.trustProxy),
+    ip: clientIp(request, deps.config.trustedProxyHops),
   } as HandlerContext<R, B, Q, P>;
   return def.handler(ctx);
 }

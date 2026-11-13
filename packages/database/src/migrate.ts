@@ -89,7 +89,7 @@ export interface MigrationFile {
 
 /** Checksum is over LF-normalised text so a CRLF checkout does not look like a changed migration. */
 export function loadMigrations(dir: string = MIGRATIONS_DIR): MigrationFile[] {
-  const names = readdirSync(dir).filter((n) => FILE_RE.test(n)).sort();
+  const names = readdirSync(/* turbopackIgnore: true */ dir).filter((n) => FILE_RE.test(n)).sort();
   return names.map((name) => {
     const sql = readFileSync(path.join(dir, name), "utf8").replace(/\r\n/g, "\n");
     const m = FILE_RE.exec(name);

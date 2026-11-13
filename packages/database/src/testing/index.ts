@@ -151,3 +151,4 @@ async function createLocked(options: CreateTestDatabaseOptions, secrets: LocalDb
 }
 export * from "./scenario";
 export * from "./web";
+export * from "./m6";

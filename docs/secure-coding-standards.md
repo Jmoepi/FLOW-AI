@@ -29,7 +29,7 @@ Map: ASVS V2, V3; T10 A07.
 
 | ID | Rule | How to verify |
 |---|---|---|
-| AU-1 | Use the hosting platform's vetted auth (Supabase Auth). No custom password storage or token minting. Dated exception for local M4 (scrypt in `apps/web/src/server/auth`, see `docs/m4-notes.md`); swap to Supabase Auth in M6. | review: no `bcrypt`, `jwt.sign` in app code |
+| AU-1 | Use the hosting platform's vetted auth (Supabase Auth). No custom password storage or token minting. Dated exception for local M4 (scrypt in `apps/web/src/server/auth`, see `docs/m4-notes.md`); swap to Supabase Auth in M6. **M6 dated note: the exception is carried forward, not closed.** The swap needs a new dependency and an auth integration decision, so it was not done in M6; the deployed app must be treated as demo credentials only, with the owner password rotated (see `docs/deployment.md`). The swap stays open for the owner to decide. | review: no `bcrypt`, `jwt.sign` in app code |
 | AU-2 | Verify the JWT signature, `iss`, `aud` and `exp` server-side on every request. Reject `alg: none` and unexpected algorithms. | negative tests with tampered, expired, wrong-audience tokens |
 | AU-3 | Session cookies: `HttpOnly`, `Secure`, `SameSite=Lax` (or `Strict`), `Path=/`, `__Host-` prefix where possible, short idle timeout, rotate on login, invalidate on logout. | test asserts `Set-Cookie` attributes |
 | AU-4 | No tokens in URLs or `localStorage`. | grep + review |
@@ -153,6 +153,6 @@ Map: ASVS V14.2; T10 A06, A08.
 - M3 (guard, database): G-1 to G-12, AZ-4, AZ-5, SV-1 to SV-5, PG-1 to PG-10, AL-1 to AL-4, IN-1, IN-2, IN-3, IN-7, SC-1.
 - M4 (owner API and page): AU-1 to AU-6, AZ-1 to AZ-3, AZ-6, WB-1 to WB-6, IN-4, IN-5, AL-1.
 - M5 (agent): AG-1 to AG-9, SV-3, SV-5, WB-5.
-- M6 (dashboard, deploy): WB-3, WB-4, SV-4, IN-4, SC-2, SC-5.
+- M6 (dashboard, deploy): WB-3, WB-4, SV-4, IN-4, SC-2, SC-5. Also done in M6: a trusted-proxy hop count for the login rate limit (`WEB_TRUSTED_PROXY_HOPS`), pruning of `login_attempts` by the web process (migration 0010, delete limited by a row policy to old windows), health probes that carry flags only, an owner run-request queue so the web process never holds the agent token (migration 0009), static CSP and stylesheet tests, and deploy-readiness checks (`pnpm deploy:check`). Accessibility is built to WCAG 2.2 AA guidelines, not formally audited.
 - M7 (regular key): SV-5, PG-8, plus a documented revoke drill.
 - M8 (hardening): re-run the review in `docs/security-review.md`, close every open item, publish `docs/threat-model.md` listing the known limitations (single shared token, env-seed custody, guard and signer in one process).

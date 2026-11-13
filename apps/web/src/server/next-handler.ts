@@ -9,6 +9,8 @@ export interface RouteContext {
 /** Adapts a framework-agnostic Route to a Next.js route handler. The app refuses to serve when startup checks fail. */
 export function handle(route: Route): (request: Request, context: RouteContext) => Promise<Response> {
   return async (request, context) => {
+    // A liveness probe must stay green when the database is down: it never builds the dependencies.
+    if (route.liveness) return jsonResponse(200, { status: "ok" });
     let deps;
     try {
       deps = await getDeps();

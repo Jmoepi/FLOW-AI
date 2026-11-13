@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:db": "vitest run -c vitest.db.config.ts"
+    "test:db": "vitest run -c vitest.db.config.ts",
+    "start:public": "next start --hostname 0.0.0.0"
   },
   "dependencies": {
     "@flow-ai/contracts": "workspace:*",

@@ -17,8 +17,11 @@ export interface WebConfig {
   /** Seconds after which an owner write needs a fresh login (AU-6). */
   stepUpSeconds: number;
   cookieSecure: boolean;
-  /** Trust X-Forwarded-For for the client IP. Only behind a proxy that overwrites it. */
-  trustProxy: boolean;
+  /**
+   * Number of trusted reverse proxies in front of the app (0 to 5). The client IP is the X-Forwarded-For entry that many
+   * places from the right, so a spoofed leftmost entry never picks the rate-limit bucket. 0 means no proxy is trusted.
+   */
+  trustedProxyHops: number;
   rlusd: { currencyHex: string; issuer: string };
 }
 /** Same value as the xrpl-adapter constant (a web test pins them together). The web app must never use the Mainnet issuer. */
@@ -58,6 +61,11 @@ const EnvSchema = z.object({
   SESSION_ABSOLUTE_SECONDS: intIn(300, 604_800, 28_800),
   STEP_UP_SECONDS: intIn(60, 3600, 900),
   WEB_TRUST_PROXY: z.enum(["true", "false"]).optional(),
+  WEB_TRUSTED_PROXY_HOPS: z
+    .string()
+    .regex(/^[0-5]$/)
+    .transform(Number)
+    .optional(),
   RLUSD_ISSUER: z.string().regex(/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/),
   RLUSD_CURRENCY_HEX: z.string().regex(/^[0-9A-F]{40}$/),
 });
@@ -86,6 +94,9 @@ export function loadWebConfig(env: NodeJS.ProcessEnv): WebConfig {
     }
     if (parsed.data.RLUSD_ISSUER === MAINNET_RLUSD_ISSUER) bad.add("RLUSD_ISSUER");
     if (parsed.data.SESSION_IDLE_SECONDS > parsed.data.SESSION_ABSOLUTE_SECONDS) bad.add("SESSION_IDLE_SECONDS");
+    // WEB_TRUST_PROXY=true is the legacy alias for one hop; stating both with different meanings is a configuration error.
+    const alias = parsed.data.WEB_TRUST_PROXY === undefined ? undefined : parsed.data.WEB_TRUST_PROXY === "true" ? 1 : 0;
+    if (alias !== undefined && parsed.data.WEB_TRUSTED_PROXY_HOPS !== undefined && alias !== parsed.data.WEB_TRUSTED_PROXY_HOPS) bad.add("WEB_TRUSTED_PROXY_HOPS");
   }
   if (!parsed.success || bad.size > 0) throw new WebConfigError([...bad].sort());
   const e = parsed.data;
@@ -96,7 +107,7 @@ export function loadWebConfig(env: NodeJS.ProcessEnv): WebConfig {
     sessionAbsoluteSeconds: e.SESSION_ABSOLUTE_SECONDS,
     stepUpSeconds: e.STEP_UP_SECONDS,
     cookieSecure: secure,
-    trustProxy: e.WEB_TRUST_PROXY === "true",
+    trustedProxyHops: e.WEB_TRUSTED_PROXY_HOPS ?? (e.WEB_TRUST_PROXY === "true" ? 1 : 0),
     rlusd: { currencyHex: e.RLUSD_CURRENCY_HEX, issuer: e.RLUSD_ISSUER },
   };
 }

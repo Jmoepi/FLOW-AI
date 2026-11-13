@@ -1,4 +1,4 @@
-import type { AgentRunsPage, AuditPage, OverviewData, PolicyData, RlusdPair, SupplierData } from "../src/components/types";
+import type { AgentRunsPage, AuditPage, InvoiceData, OverviewData, PaymentData, PolicyData, RlusdPair, SupplierData } from "../src/components/types";
 export const PAIR: RlusdPair = { currency: "524C555344000000000000000000000000000000", issuer: "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV" };
 export const POLICY: PolicyData = {
   enabled: true,
@@ -11,14 +11,62 @@ export const POLICY: PolicyData = {
   updated_at: "2026-01-15T10:00:00.000Z",
   updated_by: "you",
 };
+export const HASH = "A".repeat(64);
+export const INVOICE_OPEN: InvoiceData = {
+  id: "44444444-4444-4444-8444-444444444444",
+  invoice_number: "INV-1001",
+  supplier_id: "11111111-1111-4111-8111-111111111111",
+  supplier_name: "Globex Ltd",
+  corridor: "Cross-border",
+  amount: "150.5",
+  currency: "RLUSD",
+  due_date: "2026-01-17",
+  status: "open",
+  blocked_code: null,
+  latest_payment_id: null,
+  issue_date: "2026-01-02",
+  supplier_country: "GB",
+  supplier_address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+  description: "Consulting, January",
+  latest_payment_status: null,
+};
+export const INVOICE_BLOCKED: InvoiceData = { ...INVOICE_OPEN, id: "55555555-5555-4555-8555-555555555555", invoice_number: "INV-1002", status: "blocked", blocked_code: "SUPPLIER_NOT_APPROVED", corridor: "Domestic", due_date: "2026-01-10" };
+export const PAYMENT_PAID: PaymentData = {
+  id: "22222222-2222-4222-8222-222222222222",
+  status: "validated",
+  amount: "150.5",
+  asset: "RLUSD",
+  invoice_id: INVOICE_OPEN.id,
+  invoice_number: "INV-1001",
+  supplier_name: "Globex Ltd",
+  requested_at: "2026-01-15T10:00:00.000Z",
+  tx_hash: HASH,
+  explorer_url: `https://testnet.xrpl.org/transactions/${HASH}`,
+  failure_code: null,
+  network: "XRPL Testnet",
+  destination_address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+  ledger_index: 123,
+  validated_at: "2026-01-15T10:00:09.000Z",
+  delivered_amount: "150.5",
+  fee_drops: "12",
+  policy_version: 3,
+  failure_message: null,
+  agent_reason: "Earliest due date.",
+};
+export const PAYMENT_BLOCKED: PaymentData = { ...PAYMENT_PAID, id: "66666666-6666-4666-8666-666666666666", status: "blocked", tx_hash: null, explorer_url: null, failure_code: "DAILY_LIMIT_EXCEEDED", ledger_index: null, validated_at: null, delivered_amount: null, fee_drops: null };
+export const PAYMENT_PENDING: PaymentData = { ...PAYMENT_PAID, id: "77777777-7777-4777-8777-777777777777", status: "pending_confirmation", explorer_url: null, ledger_index: null, validated_at: null, delivered_amount: null };
 export const OVERVIEW: OverviewData = {
   network: "XRPL Testnet",
   business: { name: "Acme Test Co", timezone: "Europe/London" },
-  treasury: { rlusd_balance: "12345.5", as_of: "2026-01-15T09:00:00.000Z", source: "snapshot" },
+  treasury: { rlusd_balance: "12345.5", as_of: "2026-01-15T09:00:00.000Z", source: "snapshot", age_seconds: 120, stale: false },
   today: { business_date: "2026-01-15", automated_spend: "100", daily_limit: "1000", remaining_allowance: "900" },
   limits: { minimum_reserve: "250", max_payment_amount: "500" },
   automation: { state: "active", enabled: true, valid_until: null },
   invoices: { open: 2, blocked: 1, processing: 0 },
+  agent: { state: "ready", last_run: { id: "11111111-1111-4111-8111-111111111111", started_at: "2026-01-15T10:00:00.000Z", status: "paid", trigger: "manual", decision_code: null, invoice_number: "INV-1001" }, run_request: null },
+  last_decision_code: "DAILY_LIMIT_EXCEEDED",
+  queue: [INVOICE_BLOCKED, INVOICE_OPEN],
+  recent_payments: [PAYMENT_PAID, PAYMENT_BLOCKED],
 };
 export const SUPPLIERS: SupplierData[] = [
   { id: "11111111-1111-4111-8111-111111111111", name: "Globex Ltd", xrpl_address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe", country_code: "GB", is_approved: true, is_active: true, updated_at: null },
@@ -39,7 +87,6 @@ export const AUDIT: AuditPage = {
   ],
   next_before_seq: 7,
 };
-export const HASH = "A".repeat(64);
 export const AGENT_RUNS: AgentRunsPage = {
   runs: [
     {

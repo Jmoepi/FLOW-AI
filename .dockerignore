@@ -1,0 +1,20 @@
+# Never send secrets, local state or build output to the Docker build context.
+.env
+.env.*
+!.env.example
+.secrets
+.local-pg
+*.crt
+*.pem
+*.seed
+*wallets*.json
+.git
+.agents
+node_modules
+**/node_modules
+.next
+**/.next
+docs/demo
+*.pdf
+*.log
+coverage

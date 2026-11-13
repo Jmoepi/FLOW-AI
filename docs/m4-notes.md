@@ -45,6 +45,6 @@ Pages: `/login`, `/` (four CFO answers), `/policy`, `/suppliers`, `/audit`. Ever
 - No Supabase: sessions and credentials are local Postgres tables. Hosted setup is in `docs/supabase-runbook.md` (including the `flow_web` password step).
 - One demo owner. There is no sign-up, password reset, MFA or user management; there is no supplier create or edit UI.
 - The kill switch (`PAYMENT_EXECUTION_ENABLED`) is unchanged and still an environment variable of the guard; the web Pause only changes the policy.
-- `login_attempts` windows are never deleted because `flow_web` has no DELETE. The IP bucket is one shared bucket unless `WEB_TRUST_PROXY=true` behind a proxy that overwrites `X-Forwarded-For`.
+- `login_attempts` windows are never deleted because `flow_web` has no DELETE. The IP bucket is one shared bucket unless `WEB_TRUST_PROXY=true` behind a proxy that overwrites `X-Forwarded-For`. **Resolved in M6:** `login_attempts` is pruned by the web process (migration 0010) and the client IP is taken N entries from the right of `X-Forwarded-For` with `WEB_TRUSTED_PROXY_HOPS` (see `docs/deployment.md`).
 - A policy whose `valid_until` already passed cannot be re-saved until a new expiry is set; Pause of such a policy is blocked only by the schema.
-- `next build` prints a Turbopack warning that `migrate.ts` (filesystem access) is traced into the API routes; harmless.
+- `next build` printed a Turbopack warning that `migrate.ts` (filesystem access) is traced into the API routes; silenced in M6 with a `turbopackIgnore` comment on that one call.

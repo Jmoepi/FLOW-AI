@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AgentRunCreateSchema, AgentRunEventSchema, AgentRunFinishSchema, GuardPaymentRequestSchema, PaymentStatusSchema } from "@flow-ai/contracts";
 import { pingDatabase } from "@flow-ai/database";
 import { getAgentInvoice, getAgentSnapshot, listAgentInvoices, resolveAgentBusinessId } from "../services/agent-views";
-import { appendRunEvent, finishRun, recordRunPaymentRequest, startAgentRun, type RunOutcome } from "../services/agent-runs";
+import { appendRunEvent, claimRunRequest, finishRun, recordRunPaymentRequest, startAgentRun, type RunOutcome } from "../services/agent-runs";
 import { executeAndRespond } from "../services/execute";
 import { getPaymentById, getStatus, listPaymentsView, previewEligibility, requestPayment, type ServiceDeps } from "../services/payments";
 import { sendError } from "./errors";
@@ -127,6 +127,13 @@ export function registerInternalRoutes(app: FastifyInstance, deps: ServiceDeps):
     const businessId = await resolveAgentBusinessId(deps);
     if (businessId === null) return unavailable(reply);
     return sendRunOutcome(reply, await finishRun(deps, businessId, params.data.id, body.data, req.id), 200);
+  });
+  // The owner's "Run treasury agent" request, handed to the agent. No body in, only a request id out (or 204).
+  app.post("/internal/run-requests/claim", { bodyLimit: 1024 }, async (req, reply) => {
+    const businessId = await resolveAgentBusinessId(deps);
+    if (businessId === null) return unavailable(reply);
+    const id = await claimRunRequest(deps, businessId, req.id);
+    return id === null ? reply.code(204).send() : reply.code(200).type("application/json; charset=utf-8").send({ request_id: id });
   });
   app.get("/internal/status", async () => getStatus(deps));
   // Counts only: no payment data, hashes or blobs in the response.
