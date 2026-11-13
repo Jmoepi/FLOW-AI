@@ -64,6 +64,37 @@ export default tseslint.config(
     },
   },
   {
+    // Agent process (AG-6, 13.1B): no database, ledger, signer or env dumps. Repeats the base SQL selectors (flat config replaces rule options).
+    files: ["apps/agent/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            ...PG_PATHS,
+            { name: "@flow-ai/database", message: "The agent has no database access; it talks to the payment guard over HTTP." },
+            { name: "@flow-ai/xrpl-adapter", message: "The agent never touches the ledger or a signer." },
+            { name: "@flow-ai/policy-engine", message: "The guard is the only decision maker." },
+            { name: "xrpl", message: "The agent never touches the ledger or a signer." },
+            { name: "dotenv", message: "The agent never loads dotenv; its environment is built by the launcher." },
+            { name: "child_process", message: "Spawning is done by the MCP SDK transport only." },
+            { name: "node:child_process", message: "Spawning is done by the MCP SDK transport only." },
+          ],
+          patterns: ["pg/*", "@flow-ai/database/*", "@flow-ai/xrpl-adapter/*", "@flow-ai/policy-engine/*"],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...SQL_SELECTORS,
+        { selector: "MemberExpression[object.name=\"process\"][property.name=\"env\"]", message: "Read the environment only in src/config.ts, src/main.ts or src/mcp/server-main.ts." },
+      ],
+    },
+  },
+  {
+    files: ["apps/agent/src/config.ts", "apps/agent/src/main.ts", "apps/agent/src/mcp/server-main.ts"],
+    rules: { "no-restricted-syntax": ["error", ...SQL_SELECTORS] },
+  },
+  {
     // Test doubles implement async interfaces without awaiting, and tests index loosely typed JSON fixtures.
     files: ["**/test/**/*.ts", "**/test/**/*.tsx"],
     rules: {
