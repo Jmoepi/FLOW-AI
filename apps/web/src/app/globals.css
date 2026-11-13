@@ -431,3 +431,39 @@ legend {
     scroll-behavior: auto !important;
   }
 }
+.run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.run-list > li {
+  border-bottom: 1px solid var(--rule);
+  padding: 1rem 0;
+  overflow-wrap: anywhere;
+}
+.run-title {
+  font-size: 1.0625rem;
+  margin: 0 0 0.5rem;
+}
+.run-reason {
+  margin: 0.75rem 0;
+}
+.run-reason figcaption {
+  font-weight: 600;
+}
+.run-reason blockquote {
+  margin: 0.25rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--rule);
+  white-space: pre-wrap;
+}
+.run-steps summary {
+  cursor: pointer;
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+}
+.run-list a {
+  display: inline-block;
+  min-height: var(--target);
+}
