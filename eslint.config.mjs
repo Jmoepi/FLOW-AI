@@ -3,8 +3,14 @@ import js from "@eslint/js";
 import security from "eslint-plugin-security";
 import tseslint from "typescript-eslint";
 
+// Data access boundary (AZ-5, IN-1): the pg driver and SQL text live only in packages/database.
+const PG_PATHS = [{ name: "pg", message: "Use @flow-ai/database; SQL and the pg driver live only in packages/database." }, { name: "pg-pool", message: "Use @flow-ai/database." }];
+const SQL_SELECTORS = [
+  { selector: "Literal[value=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
+  { selector: "TemplateElement[value.raw=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
+];
 export default tseslint.config(
-  { ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**", ".agents/**", ".secrets/**", "eslint.config.mjs"] },
+  { ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**", "**/.next/**", "**/next-env.d.ts", ".agents/**", ".secrets/**", "eslint.config.mjs"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   security.configs.recommended,
@@ -33,17 +39,33 @@ export default tseslint.config(
     files: ["**/*.ts", "**/*.mts"],
     ignores: ["packages/database/**"],
     rules: {
-      "no-restricted-imports": ["error", { paths: [{ name: "pg", message: "Use @flow-ai/database; SQL and the pg driver live only in packages/database." }, { name: "pg-pool", message: "Use @flow-ai/database." }], patterns: ["pg/*"] }],
+      "no-restricted-imports": ["error", { paths: PG_PATHS, patterns: ["pg/*"] }],
+      "no-restricted-syntax": ["error", ...SQL_SELECTORS],
+    },
+  },
+  {
+    // Owner web app (WB-1): never render untrusted data as markup.
+    files: ["apps/web/**/*.ts", "apps/web/**/*.tsx"],
+    rules: {
       "no-restricted-syntax": [
         "error",
-        { selector: "Literal[value=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
-        { selector: "TemplateElement[value.raw=/\\b(SELECT\\s[\\s\\S]+\\sFROM|INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|DELETE\\s+FROM)\\b/i]", message: "SQL text is only allowed inside packages/database." },
+        ...SQL_SELECTORS,
+        { selector: "JSXAttribute[name.name=\"dangerouslySetInnerHTML\"]", message: "dangerouslySetInnerHTML is banned; render data as text (WB-1)." },
+        { selector: "Property[key.name=\"dangerouslySetInnerHTML\"]", message: "dangerouslySetInnerHTML is banned; render data as text (WB-1)." },
+        { selector: "MemberExpression[property.name=/^(innerHTML|outerHTML)$/]", message: "Do not assign markup strings; render data as text (WB-1)." },
       ],
     },
   },
   {
+    // Client-side code must not reach server-only modules (secrets, database, sessions).
+    files: ["apps/web/src/components/**/*.ts", "apps/web/src/components/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [...PG_PATHS, { name: "server-only", message: "Client components cannot import server-only code." }, { name: "@flow-ai/database", message: "Client components cannot import the database package." }], patterns: ["pg/*", "**/server/**"] }],
+    },
+  },
+  {
     // Test doubles implement async interfaces without awaiting, and tests index loosely typed JSON fixtures.
-    files: ["**/test/**/*.ts"],
+    files: ["**/test/**/*.ts", "**/test/**/*.tsx"],
     rules: {
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",

@@ -9,6 +9,7 @@ export const TOKEN = randomBytes(24).toString("hex");
 export const TOKEN_NEXT = randomBytes(24).toString("hex");
 export function validEnv(over: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   return {
+    NODE_ENV: "test", // required by the ProcessEnv type once Next.js types are in the program (apps/web imports this harness)
     XRPL_NETWORK: "xrpl-testnet",
     XRPL_WS_URL: "wss://s.altnet.rippletest.net:51233",
     RLUSD_ISSUER: "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV",
@@ -21,6 +22,6 @@ export function validEnv(over: Record<string, string | undefined> = {}): NodeJS.
 export const deadPool = { query: () => Promise.reject(new Error("db down")), connect: () => Promise.reject(new Error("db down")) } as unknown as Pool;
 const gateway = { getNetworkInfo: () => Promise.reject(new Error("ledger down")) } as unknown as GuardLedgerGateway;
 export async function makeApp(env: Record<string, string | undefined> = {}, lines: string[] = []) {
-  return buildApp({ pool: deadPool, gateway, config: loadConfig(validEnv(env)), env: () => ({ PAYMENT_EXECUTION_ENABLED: "false" }), logger: createLogger((l) => lines.push(l)) });
+  return buildApp({ pool: deadPool, gateway, config: loadConfig(validEnv(env)), env: () => ({ NODE_ENV: "test", PAYMENT_EXECUTION_ENABLED: "false" }), logger: createLogger((l) => lines.push(l)) });
 }
 export const bearer = (t: string = TOKEN) => ({ authorization: `Bearer ${t}` });

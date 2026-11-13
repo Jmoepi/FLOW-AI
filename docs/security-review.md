@@ -92,3 +92,32 @@ Live M3 run (Testnet): one validated `tesSUCCESS` payment of exactly 1 RLUSD, on
 Seed and password search (counts only, one-off script deleted): 0 hits for each wallet seed and for the local database passwords across the working tree outside `.secrets`, `node_modules` and `.git`.
 
 Not verified: a hosted Supabase database (see `docs/supabase-runbook.md`), HTTPS and deployment hardening, behaviour of the guard under a real process crash on Windows, and independent review of the test coverage claims above.
+
+## M4 additions
+Scope: owner web app and API (`apps/web`), migration 0006. Details and decisions are in `docs/m4-notes.md`.
+| Control | Where | Evidence |
+|---|---|---|
+| Deny-by-default routes with a declared role, owner-only writes, business taken from the session | `server/http/route.ts`, `server/api/routes.ts` | `route-table.test.ts`, `authz.db.test.ts` (401 anonymous, 403 viewer, 404 other tenant, 400 on `business_id`) |
+| Least-privilege `flow_web` role: RLS ENABLE and FORCE, column-level UPDATE, INSERT-only audit, no DELETE or TRUNCATE, no write on money tables | migration 0006 | `web-role.db.test.ts` |
+| Audit event in the same transaction as every policy or supplier change; hash chain intact | `server/api/policy.ts`, `suppliers.ts` | `policy-atomicity.db.test.ts`, `policy-effect.db.test.ts` |
+| Optimistic concurrency (`If-Match`), risky-change confirmation, step-up login | `server/api/policy.ts` | `policy-atomicity.db.test.ts`, contracts `web-api.test.ts` |
+| Sessions: hashed token, rotation, idle and absolute expiry, revocation, CSRF token plus Origin check, login lockout and rate limit, generic errors | `server/auth/*` | `auth-primitives.test.ts`, `auth-sessions.db.test.ts` |
+| CSP with per-request nonce, HSTS in production, nosniff, frame-ancestors none; no `dangerouslySetInnerHTML` (lint-enforced); hostile strings render as text | `proxy.ts`, `security-headers.ts`, eslint | `security-headers.test.ts`, `xss.test.tsx`, `bundle-secrets.test.ts` |
+| Web config refuses guard, agent and signer secrets | `server/config.ts` | `config.test.ts` |
+Residual risks: scrypt instead of the platform's auth until M6 (AU-1 exception); no MFA, password reset or session list; `login_attempts` rows are never pruned (no DELETE right); shared IP bucket without a trusted proxy; accessibility checks are automated jsdom only and no formal WCAG audit was done; no real-browser CSP or end-to-end test (no Playwright); the web Pause changes policy only and the environment kill switch is separate.
+## M3 review follow-up (Stage 2)
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| M-1 | Medium | AL-3 verify job was not implemented. | Fixed. `apps/payment-guard/src/jobs/audit-verify.ts` verifies the chain at startup and on an interval (`AUDIT_VERIFY_INTERVAL_SECONDS`, default 300), logs `audit.chain_broken` with counts and a random `break_id` through the redacting logger, shows the result on `/readyz` (`degraded`, 503), and blocks new execution fail closed (kill switch semantics, 13.1C) until the operator sets `AUDIT_BREAK_ACK` to that id. Tests: `audit-verify.test.ts`, `audit-verify.db.test.ts` (superuser-tampered row detected). Residual: state is in memory and the job only detects; a rewrite followed by recomputing every later hash by someone with owner access is outside what an unkeyed chain can detect (anchoring the head hash outside the database is an M7 option). |
+| M-2 | Medium | `GUARD_BUSINESS_ID` optional, so the agent token could reach any business. | Fixed. Required when `NODE_ENV=production` or `GUARD_HOST` is not loopback; startup fails closed with the variable name only. Optional in local and test. Tests in `config.test.ts`. |
+| L-1 | Low | No database trigger ties a payment's destination and amount to the invoice and supplier. | Deferred (needs a migration and trigger tests; all queries are parameterised and a compromised guard holds the seed anyway). Owner: M7 hardening. |
+| L-2 | Low | `/readyz` revealed whether the kill switch variable was set. | Fixed. The field is gone. `/readyz` now exposes `db`, `ledger`, `audit_chain` state and last verified time only. |
+| L-3 | Low | Launcher copied the whole parent environment into the guard. | Fixed. `baseGuardEnv` allowlists the variables node needs; everything else must be set explicitly. |
+| L-4 | Low | `GUARD_HOST` accepts any host; no TLS check. | Deferred to deployment (M6/M7). Partly addressed: a non-loopback host now forces `GUARD_BUSINESS_ID`. |
+| L-5 | Low | Demo timezone note, Windows `child.kill`, stale test count. | Fixed for the note (schema defaults are already ZA / Africa/Johannesburg) and the README count. The Windows `child.kill` behaviour is accepted for the local launcher. |
+
+## Residual risks and open Low items (before deployment or demo)
+- Compromise of the `flow_web` role is equivalent to owner compromise. The session tables are permissive by design until Supabase Auth replaces the local auth provider in M6.
+- Open Low: `login_attempts` rows are never pruned. Add a pruning job before deployment.
+- Open Low: a trusted-proxy setting is needed before deployment, otherwise all clients share one IP rate-limit bucket.
+- Open Low: a manual real-browser accessibility and CSP pass is needed before the demo. Current checks are automated jsdom tests only.

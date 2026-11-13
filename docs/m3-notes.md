@@ -57,11 +57,11 @@ Docker Desktop was already running; no Docker problem occurred.
 
 ## Honest caveats
 
-- The demo business uses the schema defaults for country and timezone, not ZA / `Africa/Johannesburg` as first planned, because setting them needs SQL outside `packages/database`. The daily-cap day therefore follows the default timezone. This does not affect the payment.
+- The demo business is created with the schema defaults, which are already `ZA` and `Africa/Johannesburg` (migration 0002), so the daily-cap day follows South African time. (Corrected in the Stage 2 review pass: this note previously said the demo used a non-matching default.)
 - The guard ran as a local child process on loopback with an env-seed signer (spec 10.8 MVP default). There is no HTTPS, no deployed host and no regular-key backstop yet (M7).
 - Windows: `child.kill` ends the guard without running its graceful shutdown handlers, so in-flight work is not drained on stop. The e2e run had nothing in flight at that point.
 - `.secrets/m3-e2e.json` is a local single-use guard, not a distributed lock. Deleting it would allow another real payment; do not delete it.
-- Test counts are from this run; `docs/m2-notes.md` and the README row for M2 still quote 169 for the policy engine while the suite now has 172.
+- Test counts are from this run. `docs/m2-notes.md` is a historical record and still says 169; the README row for M2 now says 172.
 - Not verified: behaviour against a hosted Supabase Postgres (not contacted). The runbook lists what to check there.
 - The blocked invoice shows status `blocked` in the demo database; whether the owner UI should show that status is an M4 question.
 
@@ -73,3 +73,15 @@ Docker Desktop was already running; no Docker problem occurred.
 4. 9.2: HTTP status semantics (200 stored or blocked, 202 in flight, 400, 409 key reuse, 401, 413, 415, 429) and the strict request body.
 
 `Flow_AI_MVP_README_v3.0.md` was not touched.
+
+## Stage 2 review fixes (M-1, M-2 and cheap Lows)
+Fixes for the two Medium findings in the M3 review. Local Docker Postgres only; no remote database was contacted and no transaction was submitted.
+- M-1, audit chain verify job (AL-3): `apps/payment-guard/src/jobs/audit-verify.ts`. Runs at startup before the guard listens, then every `AUDIT_VERIFY_INTERVAL_SECONDS` (default 300, range 10 to 86400). It runs `verify_audit_chain` for the pinned business, or every business when none is pinned, and records `unverified | ok | broken | error` with a timestamp. Logs go through the redacting logger and carry counts and a random `break_id` only (no business ids, rows or hashes).
+- On a detected break the state is `broken` and execution is blocked fail closed, using the kill switch path (13.1C): the policy engine sees a non-`true` switch value (decision `EXECUTION_DISABLED`, nothing reserved or signed), and the executor cancels any payment that was reserved but not yet signed. The block stays until the operator sets `AUDIT_BREAK_ACK` to the `break_id` from the `audit.chain_broken` log line. The variable is re-read on every call (no restart), is not readable by the agent, and only the exact id of the current break counts; a later new break needs a new acknowledgement. After acknowledgement the state still reads `broken` (visible) and the job keeps verifying. An unreadable database is reported as `error`, logged, and is not treated as a break; it never clears an existing break.
+- `/readyz` (public) reports `status` (`ok`, `degraded` with 503 while blocked, `unavailable`), `db`, `ledger`, `audit_chain` and `audit_verified_at`. `/internal/status` also reports `audit_chain` and shows the kill switch as `disabled` while blocked.
+- The break state lives in process memory. A restart re-verifies at startup, so an unfixed break blocks again, with a new `break_id`.
+- Chosen design: the acknowledgement is an operator-controlled environment value rather than an HTTP endpoint, so the agent token (which could otherwise self-acknowledge) cannot lift the block. A signed owner action in the web app is an M4 option.
+- Tests: `test/audit-verify.test.ts` (unit, mocked database), `test/audit-verify.db.test.ts` (a row is tampered through a superuser connection in the throwaway database via `tamperAuditRow`; the job detects it, readiness degrades, a request is blocked, a pre-reserved payment is cancelled unsigned, an exact `break_id` unblocks).
+- M-2, tenant pin: `GUARD_BUSINESS_ID` is now required (valid UUID) when `NODE_ENV=production` or when `GUARD_HOST` is not a loopback address (`127.0.0.1`, `::1`, `localhost`). Startup fails closed with a `ConfigError` that names the variable only. It stays optional for local and test use. Tests in `test/config.test.ts`.
+- Lows: L-2 fixed (`/readyz` no longer reports whether the kill switch variable is set). L-3 fixed (the launcher builds the guard environment from an allowlist). L-5 fixed (timezone note corrected, README test count updated). L-1 (database trigger tying payments to invoice and supplier) and L-4 (TLS and bind checks) are deferred; see `docs/security-review.md`.
+- Not verified here: the launcher allowlist change was checked by typecheck and lint only; `pnpm guard:dev` and `pnpm m3:e2e` were not run because they contact Testnet and the latter spends RLUSD. Acknowledgement by changing the environment of a running process depends on how the host sets variables (it is read from `process.env`); in practice set it and restart if the host cannot change a live environment.

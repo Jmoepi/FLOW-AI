@@ -30,6 +30,11 @@ The tool refuses a non-local host without `--allow-remote` and without TLS, and 
 - Put `GUARD_DATABASE_URL` (user `flow_guard`) only in the guard's secret store. The agent has no database credential. The web app uses its own credentials, not the guard's.
 - The guard refuses to start if its role is a superuser or has `BYPASSRLS`.
 
+## 4a. The `flow_web` role (M4)
+- Migration 0006 creates `flow_web` with `LOGIN NOSUPERUSER NOBYPASSRLS` and no password. It can read tenant tables only through RLS keyed on the transaction-local `app.business_id`, update only the policy and supplier flag columns, insert audit events, and has no DELETE or TRUNCATE.
+- Set the password out-of-band, once, in the Supabase SQL editor: `ALTER ROLE flow_web PASSWORD '<new random password>';`. Never put it in a migration file or a commit.
+- Put `WEB_DATABASE_URL` (user `flow_web`) only in the web app's secret store. The web app must not receive `DATABASE_URL`, `GUARD_DATABASE_URL`, a signer seed or the Supabase service role key (it refuses to start if it does).
+- Create the owner login and its `business_members` row with an admin connection (the `pnpm db:seed:demo` script is local only). Rotate by `ALTER ROLE` plus updating the secret store.
 ## 5. Keys that must not be used by the guard
 
 - Supabase `anon` and `authenticated` roles must have no grants on these tables. The guard never uses the anon or public key.

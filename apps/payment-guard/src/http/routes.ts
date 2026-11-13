@@ -24,8 +24,12 @@ export function registerPublicRoutes(app: FastifyInstance, deps: ServiceDeps): v
       pingDatabase(deps.pool).then(() => true, () => false),
       deps.gateway.getNetworkInfo().then(() => true, () => false),
     ]);
-    const body = { status: db && ledger ? "ok" : "unavailable", db, ledger, kill_switch_set: deps.env().PAYMENT_EXECUTION_ENABLED !== undefined };
-    return reply.code(db && ledger ? 200 : 503).send(body);
+    // Flags only (L-2): the kill switch variable is no longer reported. The audit chain result is a state word and a
+    // timestamp, never a business id, row or hash.
+    const audit = deps.integrity?.status(deps.env()) ?? { state: "unverified" as const, last_checked_at: null, blocked: false };
+    const up = db && ledger;
+    const status = !up ? "unavailable" : audit.blocked ? "degraded" : "ok";
+    return reply.code(up && !audit.blocked ? 200 : 503).send({ status, db, ledger, audit_chain: audit.state, audit_verified_at: audit.last_checked_at });
   });
 }
 /** Every route here sits behind the bearer-token hook installed by the caller (AZ-1). */

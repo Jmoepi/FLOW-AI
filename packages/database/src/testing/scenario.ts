@@ -208,3 +208,17 @@ export async function businessIds(admin: pg.Pool): Promise<string[]> {
   const r = await admin.query<{ id: string }>("SELECT id FROM businesses");
   return r.rows.map((x) => x.id);
 }
+/**
+ * Test only: simulates an attacker with owner/superuser access by disabling the immutability trigger in the throwaway
+ * database and rewriting one audit row's metadata, so verify_audit_chain must report a break.
+ */
+export async function tamperAuditRow(admin: pg.Pool, businessId: string, seq = 1): Promise<void> {
+  const c = await admin.connect();
+  try {
+    await c.query("ALTER TABLE audit_events DISABLE TRIGGER audit_immutable");
+    await c.query("UPDATE audit_events SET metadata = '{\"tampered\":true}'::jsonb WHERE business_id = $1 AND seq = $2", [businessId, seq]);
+    await c.query("ALTER TABLE audit_events ENABLE TRIGGER audit_immutable");
+  } finally {
+    c.release();
+  }
+}

@@ -22,6 +22,8 @@ export interface GuardConfig {
   staleReservationTimeoutSeconds: number;
   balancePollIntervalSeconds: number;
   reconcileIntervalSeconds: number;
+  /** How often the audit hash chain is re-verified (AL-3). */
+  auditVerifyIntervalSeconds: number;
   rateLimitPerMinute: number;
   /** How long the HTTP request waits for a validated outcome before answering 202 pending_confirmation. */
   paymentWaitSeconds: number;
@@ -34,6 +36,7 @@ const int = (min: number, max: number, def: number) =>
     .pipe(z.number().int().min(min).max(max))
     .optional()
     .transform((v) => v ?? def);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const token = z.string().min(32).max(256).regex(/^[\x21-\x7e]+$/);
 const EnvSchema = z.object({
   XRPL_NETWORK: z.string().min(1),
@@ -50,6 +53,7 @@ const EnvSchema = z.object({
   STALE_RESERVATION_TIMEOUT_SECONDS: int(30, 3600, 300),
   BALANCE_POLL_INTERVAL_SECONDS: int(5, 600, 30),
   RECONCILE_INTERVAL_SECONDS: int(5, 600, 15),
+  AUDIT_VERIFY_INTERVAL_SECONDS: int(10, 86400, 300),
   GUARD_RATE_LIMIT_PER_MINUTE: int(1, 1000, 30),
   GUARD_PAYMENT_WAIT_SECONDS: int(5, 300, 45),
 });
@@ -80,6 +84,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): GuardConfig {
   if (cleaned.AGENT_TO_PAYMENT_GUARD_TOKEN_NEXT !== undefined && cleaned.AGENT_TO_PAYMENT_GUARD_TOKEN_NEXT === cleaned.AGENT_TO_PAYMENT_GUARD_TOKEN) {
     bad.add("AGENT_TO_PAYMENT_GUARD_TOKEN_NEXT");
   }
+  // The tenant pin is the only business boundary (RLS is USING (true) for the guard role), so it is mandatory outside
+  // local development: NODE_ENV=production, or a bind address that is not loopback (a deployment).
+  const nonLocal = cleaned.NODE_ENV === "production" || (cleaned.GUARD_HOST !== undefined && !LOOPBACK_HOSTS.has(cleaned.GUARD_HOST.toLowerCase()));
+  if (nonLocal && cleaned.GUARD_BUSINESS_ID === undefined) bad.add("GUARD_BUSINESS_ID");
   if (!parsed.success || bad.size > 0) throw new ConfigError([...bad].sort());
   const e = parsed.data;
   return {
@@ -94,6 +102,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): GuardConfig {
     staleReservationTimeoutSeconds: e.STALE_RESERVATION_TIMEOUT_SECONDS,
     balancePollIntervalSeconds: e.BALANCE_POLL_INTERVAL_SECONDS,
     reconcileIntervalSeconds: e.RECONCILE_INTERVAL_SECONDS,
+    auditVerifyIntervalSeconds: e.AUDIT_VERIFY_INTERVAL_SECONDS,
     rateLimitPerMinute: e.GUARD_RATE_LIMIT_PER_MINUTE,
     paymentWaitSeconds: e.GUARD_PAYMENT_WAIT_SECONDS,
   };

@@ -64,3 +64,32 @@ describe("assertLeastPrivilegeRole", () => {
     expect(() => assertLeastPrivilegeRole({ rolsuper: false, rolbypassrls: false })).not.toThrow();
   });
 });
+describe("GUARD_BUSINESS_ID tenant pin (M-2)", () => {
+  const ID = "3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6b";
+  it("is optional in local and test use", () => {
+    expect(fields(validEnv())).toEqual([]);
+    expect(fields(validEnv({ NODE_ENV: "test" }))).toEqual([]);
+    expect(fields(validEnv({ NODE_ENV: "development", GUARD_HOST: "localhost" }))).toEqual([]);
+    expect(fields(validEnv({ GUARD_HOST: "::1" }))).toEqual([]);
+  });
+  it("is required when NODE_ENV=production, failing closed with the variable name only", () => {
+    expect(fields(validEnv({ NODE_ENV: "production" }))).toEqual(["GUARD_BUSINESS_ID"]);
+    expect(fields(validEnv({ NODE_ENV: "production", GUARD_BUSINESS_ID: "" }))).toEqual(["GUARD_BUSINESS_ID"]);
+    expect(loadConfig(validEnv({ NODE_ENV: "production", GUARD_BUSINESS_ID: ID })).businessId).toBe(ID);
+  });
+  it("is required for a non-loopback bind (a deployment)", () => {
+    for (const host of ["0.0.0.0", "10.0.0.5", "guard.internal"]) expect(fields(validEnv({ GUARD_HOST: host }))).toEqual(["GUARD_BUSINESS_ID"]);
+    expect(fields(validEnv({ GUARD_HOST: "0.0.0.0", GUARD_BUSINESS_ID: ID }))).toEqual([]);
+  });
+  it("still rejects a malformed id in production", () => {
+    expect(fields(validEnv({ NODE_ENV: "production", GUARD_BUSINESS_ID: "not-a-uuid" }))).toEqual(["GUARD_BUSINESS_ID"]);
+  });
+});
+describe("AUDIT_VERIFY_INTERVAL_SECONDS", () => {
+  it("defaults to 300 and is bounded", () => {
+    expect(loadConfig(validEnv()).auditVerifyIntervalSeconds).toBe(300);
+    expect(loadConfig(validEnv({ AUDIT_VERIFY_INTERVAL_SECONDS: "60" })).auditVerifyIntervalSeconds).toBe(60);
+    expect(fields(validEnv({ AUDIT_VERIFY_INTERVAL_SECONDS: "1" }))).toEqual(["AUDIT_VERIFY_INTERVAL_SECONDS"]);
+    expect(fields(validEnv({ AUDIT_VERIFY_INTERVAL_SECONDS: "abc" }))).toEqual(["AUDIT_VERIFY_INTERVAL_SECONDS"]);
+  });
+});
