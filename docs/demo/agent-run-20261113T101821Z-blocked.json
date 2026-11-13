@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "label": "RECORDED RUN (not live)",
+  "recorded_at": "2026-11-13T10:18:21.958Z",
+  "ledger": "testnet",
+  "network": "xrpl-testnet",
+  "mode": "deterministic",
+  "effective_mode": "deterministic",
+  "trigger": "manual",
+  "status": "blocked",
+  "summary": "Payment not submitted. Payment execution is disabled by the emergency switch (missing, malformed or not exactly 'true'). No funds were moved.",
+  "decision_code": "EXECUTION_DISABLED",
+  "agent_reason": "Deterministic probe: earliest due date (2026-12-13) among 1 ineligible invoices, amount 5 RLUSD. The payment guard decides.",
+  "tool_call_count": 4,
+  "payment": {
+    "id": "2789cc87-9e53-4b47-963c-141c9c610500",
+    "tx_hash": null,
+    "explorer_url": null
+  },
+  "events": [
+    {
+      "kind": "tool_call",
+      "tool_name": "get_business_snapshot",
+      "ok": true,
+      "duration_ms": 244,
+      "input": {},
+      "output": {
+        "rlusd_balance": "5",
+        "minimum_reserve": "4",
+        "daily_remaining": "3",
+        "automation": "enabled",
+        "stale": false
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "list_open_invoices",
+      "ok": true,
+      "duration_ms": 1142,
+      "input": {
+        "limit": 20
+      },
+      "output": {
+        "count": 1,
+        "invoices": [
+          {
+            "invoice_id": "61fbd390-cf7e-43b0-b887-6c82eb45c649",
+            "due_date": "2026-12-13",
+            "amount": "5",
+            "eligible": false
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "get_invoice_details",
+      "ok": true,
+      "duration_ms": 1052,
+      "input": {
+        "invoice_id": "61fbd390-cf7e-43b0-b887-6c82eb45c649"
+      },
+      "output": {
+        "invoice_id": "61fbd390-cf7e-43b0-b887-6c82eb45c649",
+        "eligible": false,
+        "failed_checks": [
+          "EXECUTION_DISABLED",
+          "PAYMENT_LIMIT_EXCEEDED",
+          "MINIMUM_RESERVE_BREACHED",
+          "DAILY_LIMIT_EXCEEDED"
+        ]
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "input": {
+        "invoice_id": "61fbd390-cf7e-43b0-b887-6c82eb45c649",
+        "idempotency_key": "agent-e7c7650a01bb9326a9923cb72b8d922db06f1004",
+        "agent_reason": "Deterministic probe: earliest due date (2026-12-13) among 1 ineligible invoices, amount 5 RLUSD. The payment guard decides."
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "ok": true,
+      "duration_ms": 1258,
+      "input": {
+        "invoice_id": "61fbd390-cf7e-43b0-b887-6c82eb45c649",
+        "idempotency_key": "agent-e7c7650a01bb9326a9923cb72b8d922db06f1004"
+      },
+      "output": {
+        "payment_id": "2789cc87-9e53-4b47-963c-141c9c610500",
+        "status": "blocked",
+        "decision_code": "EXECUTION_DISABLED",
+        "failure_code": "EXECUTION_DISABLED",
+        "amount": "5",
+        "tx_hash": null
+      }
+    }
+  ]
+}

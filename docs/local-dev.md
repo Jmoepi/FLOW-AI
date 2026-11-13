@@ -27,6 +27,7 @@ pnpm dev:web
 ```
 Open http://127.0.0.1:3000/login. Email: `owner@demo.flow-ai.test` (or the value in `.secrets/web-owner.env`). Password: the `DEMO_OWNER_PASSWORD` line in `.secrets/web-owner.env`.
 
+Run the agent (guard must be running; deterministic mode needs no key): `pnpm agent:run` (add `-- --record` to write a transcript to `docs/demo/`, `-- --probe-ineligible` to see the guard block an invoice). Then open http://127.0.0.1:3000/agent. See [m5-notes.md](m5-notes.md).
 `pnpm guard:dev -- --enable-execution` turns the kill switch on (real Testnet RLUSD payments become possible). Do not use it for click-through demos.
 
 ## Check it

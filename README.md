@@ -13,7 +13,7 @@ This is a hackathon MVP (Agentic Finance track). It runs on XRPL Testnet only, i
 | M2 | Pure policy engine | Done. 172 tests (169 at M2, plus 3 added by the F-14 review fix; see `docs/m2-notes.md`) |
 | M3 | Payment guard with persistence | Done locally (Docker Postgres). One real 1 RLUSD payment made through the guard (validated `tesSUCCESS`, hash `87165684D8BF899BB5285141C4516ED40FB6E39DBC470E54A90E61F55A427B0C`), plus a blocked request and a duplicate request. Follow-up Medium findings M-1 (audit-chain verify job) and M-2 (`GUARD_BUSINESS_ID` required in production) are fixed. Tests at the current HEAD (counts include M4 work): 567 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 133, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); see `docs/m3-notes.md`. Supabase hosting is documented in `docs/supabase-runbook.md` but not set up |
 | M4 | Owner policy API and page, audit events | Done locally (Docker Postgres, no Supabase). Owner login, policy page with confirm and conflict handling, suppliers and audit pages, nonce CSP, same-transaction audit events, and a proof that lowering the cap blocks the next payment request. Tests: 567 unit in `pnpm test` (contracts 67, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 133, web 115) and 160 db in `pnpm test:db` (database 51, web 47, payment-guard 62); typecheck, lint, secret-scan and audit pass. Built to WCAG 2.2 AA guidelines, not formally audited; no real-browser test. See `docs/m4-notes.md` |
-| M5 | Agent plus MCP tools | Not started |
+| M5 | Agent plus MCP tools | Done locally (Docker Postgres, no Supabase) in deterministic mode. Five MCP tools over stdio with strict schemas, bounded agent loop, run records written through the guard (migration 0007), owner-only Agent activity page. The LLM path (Anthropic adapter) is unit tested with fakes only: no API key, no model id, no live LLM call. The real agent payment is pending a treasury top-up (treasury holds 5 RLUSD, the gate needs 6); a real blocked run is recorded in `docs/demo/` and the paid flow is verified against the fake XRPL gateway. The guard now derives the run outcome itself (migration 0008); MCP tool errors are text-only so they pass the SDK `outputSchema` check. Tests: 851 unit in `pnpm test` (contracts 87, xrpl-adapter 62, policy-engine 172, database 18, payment-guard 137, web 145, agent 230) and 224 db in `pnpm test:db` (database 70, web 48, agent 17, payment-guard 89); typecheck, lint, secret-scan and audit pass. See `docs/m5-notes.md` |
 | M6 | Dashboard screens and deployed URL | Not started |
 | M7 | Revocable regular-key backstop | Not started |
 | M8 | Demo hardening, video, threat model | Not started |
@@ -41,15 +41,15 @@ Three processes and four packages, each process with its own credentials.
 
 Trust boundary: the agent never holds keys or policy. It can only ask the guard to pay an invoice. The guard rebuilds the payment from its own canonical records, ignoring any amount or destination the model supplies, runs the policy checks, and signs only on an allow decision. The owner sets limits outside the agent. The enforcement is application-layer, not a trustless on-ledger restriction. The spec adds a revocable regular key (M7) as an on-ledger backstop that lets the owner cut off the guard's signing authority.
 
-`packages/contracts`, `packages/policy-engine`, `packages/xrpl-adapter`, `packages/database` and `apps/payment-guard` are implemented (M0 to M3); `apps/web` is implemented (M4); `apps/agent` is still a typechecked placeholder.
+`packages/contracts`, `packages/policy-engine`, `packages/xrpl-adapter`, `packages/database` and `apps/payment-guard` are implemented (M0 to M3); `apps/web` is implemented (M4); `apps/agent` is implemented (M5, deterministic mode verified, LLM mode untested against a live model).
 
 ## Repo layout
 
 ```text
 apps/            web, payment-guard, agent
 packages/        contracts, database, xrpl-adapter, policy-engine
-scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, m3-e2e, seed-demo-owner, dev-web, setup-hooks, git-hooks/
-docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, m4-notes.md, local-dev.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
+scripts/         secret-scan, setup-testnet-accounts, trust-lines, preflight, m1-send-rlusd, db-local, db-migrate, guard-dev, agent-run, agent-demo, m3-e2e, seed-demo-owner, dev-web, setup-hooks, git-hooks/
+docs/            m0-notes.md, m1-notes.md, m2-notes.md, m3-notes.md, m4-notes.md, m5-notes.md, demo/ (recorded agent runs), local-dev.md, supabase-runbook.md, task1-changes.md, security-review.md, secure-coding-standards.md
 Flow_AI_MVP_README_v3.5.md   spec of record
 .env.example     environment template (placeholders only)
 ```
@@ -75,6 +75,8 @@ Scripts:
 - `pnpm db:migrate [status]`: applies the SQL migrations to the local database (a non-local `DATABASE_URL` needs `--allow-remote` and TLS).
 - `pnpm test:db`: database and guard integration tests against the local Docker Postgres (each run uses a throwaway database).
 - `pnpm guard:dev`: starts the payment guard on 127.0.0.1:4002 (Testnet). The signer seed is read from `.secrets` by the launcher and handed to the guard through its environment in memory; the agent token is random per launch.
+- `pnpm agent:run`: one agent run against the running guard (start `pnpm guard:dev` first). Deterministic mode needs no key. Flags after `--`: `--record` (secret-free transcript in `docs/demo/`), `--probe-ineligible`, `--schedule`. To use the LLM, set `AGENT_MODE=llm`, `AI_MODEL` and `AI_API_KEY` in the local gitignored `.env`; the agent refuses to start in llm mode without them and refuses to start if database or signer variables are present.
+- `pnpm agent:demo -- --check-treasury` (read-only balance gate) / `--blocked-only` (default, submits nothing) / `--enable-execution` (one real 1 RLUSD agent payment; refuses unless the treasury holds at least 6 RLUSD and keeps at least 5; single use). Not yet run for real: the real agent payment is pending a treasury top-up to at least 6 RLUSD; see `docs/m5-notes.md`.
 - `pnpm m3:e2e -- --blocked-only`: starts a fresh local database and the guard and shows an over-cap request being blocked (submits nothing). `pnpm m3:e2e -- --confirm-real-payment` makes the ONE authorised real 1 RLUSD payment and refuses to run again (already used; see `docs/m3-notes.md`).
 - `pnpm db:seed:demo`: creates the labelled demo business (if missing) and one owner login in the local database. The owner password comes from `DEMO_OWNER_PASSWORD` or `.secrets/web-owner.env` (generated there if absent) and is never printed. Run `pnpm db:migrate -- --local` first. Re-running is a no-op; `-- --reset-password` replaces the password.
 - `pnpm dev:web`: starts the owner web app on http://127.0.0.1:3000 against the local database as the `flow_web` role (connection assembled in memory, allowlisted environment).
@@ -98,7 +100,7 @@ RLUSD claim (manual, only needed to top up): open https://tryrlusd.com/, choose 
 ## Documentation and resources
 
 - Spec: [Flow_AI_MVP_README_v3.5.md](Flow_AI_MVP_README_v3.5.md)
-- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m1-notes.md](docs/m1-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [docs/m3-notes.md](docs/m3-notes.md), [docs/m4-notes.md](docs/m4-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
+- Notes: [docs/m0-notes.md](docs/m0-notes.md), [docs/m1-notes.md](docs/m1-notes.md), [docs/m2-notes.md](docs/m2-notes.md), [docs/m3-notes.md](docs/m3-notes.md), [docs/m4-notes.md](docs/m4-notes.md), [docs/m5-notes.md](docs/m5-notes.md), [packages/policy-engine/README.md](packages/policy-engine/README.md)
 - RLUSD on the XRPL (Ripple docs): https://docs.ripple.com/products/stablecoin/developer-resources/rlusd-on-the-xrpl
 - Send a trust line token: https://xrpl.org/docs/tutorials/payments/send-a-trust-line-token
 - xrpl.js: https://js.xrpl.org/
