@@ -13,8 +13,8 @@
 import { closeSync, existsSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { XrplGateway, amountsEqual, isGreater, subtractAmounts } from "../packages/xrpl-adapter/src/index";
-import { LOCAL_DB } from "../packages/database/src/index";
-import { createTestDatabase, seedInvoice, seedScenario, type TestDatabase } from "../packages/database/src/testing/index";
+import { LOCAL_DB, loadLocalDbSecrets } from "../packages/database/src/index";
+import { auditChainValid, createTestDatabase, invoicePaymentCounts, openLocalAdminPool, paymentReplayInputs, runStatusesForPayment, seedInvoice, seedScenario, type TestDatabase } from "../packages/database/src/testing/index";
 import { SECRETS_DIR, loadConfig, readPublicWallets, toErrorMessage } from "./lib/common";
 import { startAgent } from "./lib/agent-launcher";
 import { startGuard, waitReady, type GuardHandle } from "./lib/guard-launcher";
@@ -24,13 +24,14 @@ const MIN_TREASURY_AFTER = "5";
 const MIN_TREASURY_TO_RUN = "6";
 const GUARD_PORT = 4013;
 const SINGLE_USE_FILE = path.join(SECRETS_DIR, "m5-agent-demo.json");
-const USAGE = "Usage: agent-demo --check-treasury | --blocked-only | --enable-execution";
+const USAGE = "Usage: agent-demo --check-treasury | --blocked-only | --enable-execution [--regular-key] | --verify-paid";
 
 type Mode = "check-treasury" | "blocked-only" | "real";
 
 /** Pure: the demo mode from argv. Real submission needs the explicit --enable-execution flag. */
 export function parseArgs(argv: readonly string[]): Mode {
-  const args = argv.filter((a) => a !== "--");
+  const args = argv.filter((a) => a !== "--" && a !== "--regular-key" && a !== "--verify-paid");
+  if (argv.includes("--regular-key") && !args.includes("--enable-execution")) throw new Error(USAGE);
   if (args.length === 0) return "blocked-only";
   if (args.length !== 1) throw new Error(USAGE);
   if (args[0] === "--check-treasury") return "check-treasury";
@@ -77,7 +78,74 @@ function writeSingleUse(record: Record<string, unknown>): void {
   renameSync(tmp, SINGLE_USE_FILE);
 }
 
+interface ProofContext {
+  businessId: string;
+  invoiceId: string;
+  paymentId: string;
+  hash: string;
+  treasuryAddress: string;
+  treasuryAfter: string;
+  bal: (address: string) => Promise<string | null>;
+}
+/** Replay and duplicate requests through the guard, then check payment count, balance, run record and audit chain. */
+async function proveNoDoublePay(guard: GuardHandle, pool: TestDatabase["adminPool"], c: ProofContext): Promise<void> {
+  const row = await paymentReplayInputs(pool, c.paymentId);
+  const key = row?.idempotency_key;
+  must(key !== undefined, "the payment must have an idempotency key");
+  const reason = row?.agent_reason;
+  const post = async (idempotency_key: string) => {
+    const res = await fetch(`http://127.0.0.1:${String(guard.port)}/internal/payment-requests`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${guard.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ invoice_id: c.invoiceId, idempotency_key, ...(reason ? { agent_reason: reason } : {}) }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    return { http: res.status, body: (await res.json()) as { status?: string; payment_id?: string; tx_hash?: string | null; decision_code?: string } };
+  };
+  const replay = await post(key);
+  must(replay.body.payment_id === c.paymentId && replay.body.tx_hash === c.hash, "same-key replay must return the original payment and hash");
+  const duplicate = await post(`dup-${key.slice(0, 40)}`);
+  must(duplicate.body.status !== "validated" || duplicate.body.payment_id === c.paymentId, "a duplicate request must not create a second payment");
+  const counts = await invoicePaymentCounts(pool, c.invoiceId);
+  must(counts.validated === "1" && counts.hashed === "1", "exactly one validated payment with a hash must exist for the invoice");
+  must((await c.bal(c.treasuryAddress)) === c.treasuryAfter, "treasury balance must not move after the replay and duplicate requests");
+  const runs = await runStatusesForPayment(pool, c.businessId, c.paymentId);
+  const auditOk = await auditChainValid(pool, c.businessId);
+  console.log(`Proof: replay_http=${String(replay.http)} replay_status=${String(replay.body.status)} duplicate_http=${String(duplicate.http)} duplicate_status=${String(duplicate.body.status)} duplicate_code=${String(duplicate.body.decision_code)}`);
+  console.log(`Proof: run_status=${runs.join(",")} audit_chain_valid=${String(auditOk)} validated_payments=${counts.validated} payment_rows=${counts.total} treasury_after=${c.treasuryAfter}`);
+  must(runs.length === 1 && runs[0] === "paid", "the run record must show the derived outcome paid");
+  must(auditOk, "the audit chain must verify");
+}
+async function verifyPaid(): Promise<void> {
+  const cfg = loadConfig();
+  const treasury = readPublicWallets().find((w) => w.role === "treasury");
+  if (!treasury) throw new Error("Treasury wallet missing from the secrets file.");
+  const rec = JSON.parse(readFileSync(SINGLE_USE_FILE, "utf8")) as Record<string, string | undefined>;
+  const { database, business_id: businessId, invoice_id: invoiceId, payment_id: paymentId, tx_hash: hash } = rec;
+  if (!database || !businessId || !invoiceId || !paymentId || !hash || !/^flow_test_[0-9a-f]+$/.test(database)) throw new Error("The single-use record has no completed payment to verify.");
+  const secrets = loadLocalDbSecrets(SECRETS_DIR, false);
+  if (secrets === null) throw new Error("No local database secrets.");
+  const pool = openLocalAdminPool(secrets, database);
+  const gw = await XrplGateway.connect(cfg.network, { wsUrl: cfg.wsUrl });
+  let guard: GuardHandle | undefined;
+  try {
+    const bal = (a: string) => gw.getIssuedBalance(a, cfg.issuer, cfg.currencyHex);
+    const treasuryNow = await bal(treasury.address);
+    must(treasuryNow !== null, "treasury trust line");
+    const databaseUrl = `postgres://flow_guard:${encodeURIComponent(secrets.guardPassword)}@${LOCAL_DB.host}:${String(LOCAL_DB.port)}/${database}`;
+    // Kill switch OFF: nothing can be submitted during this verification.
+    guard = startGuard({ databaseUrl, businessId, port: GUARD_PORT, treasuryLabel: treasury.label, executionEnabled: false, signerMode: "regular_key" });
+    await waitReady(guard, 90_000);
+    console.log("Verification guard ready (execution DISABLED).");
+    await proveNoDoublePay(guard, pool, { businessId, invoiceId, paymentId, hash, treasuryAddress: treasury.address, treasuryAfter: treasuryNow, bal });
+  } finally {
+    await guard?.stop();
+    await pool.end().catch(() => undefined);
+    await gw.disconnect();
+  }
+}
 async function main(): Promise<void> {
+  if (process.argv.includes("--verify-paid")) return verifyPaid();
   const mode = parseArgs(process.argv.slice(2));
   const cfg = loadConfig();
   const real = mode === "real";
@@ -118,7 +186,7 @@ async function main(): Promise<void> {
     const overcapId = await seedInvoice(db.adminPool, sc, { amount: "5", invoiceNumber: "INV-DEMO-OVERCAP", description: "DEMO over-cap invoice (sample data)" });
 
     const databaseUrl = `postgres://flow_guard:${encodeURIComponent(db.secrets.guardPassword)}@${LOCAL_DB.host}:${String(LOCAL_DB.port)}/${db.name}`;
-    guard = startGuard({ databaseUrl, businessId: sc.businessId, port: GUARD_PORT, treasuryLabel: treasury.label, executionEnabled: real });
+    guard = startGuard({ databaseUrl, businessId: sc.businessId, port: GUARD_PORT, treasuryLabel: treasury.label, executionEnabled: real, signerMode: process.argv.includes("--regular-key") ? "regular_key" : "master_env" });
     await waitReady(guard, 90_000);
     await waitForSnapshot(guard);
     console.log(`Guard ready (Testnet, local database, execution ${real ? "ENABLED" : "disabled"}).`);
@@ -138,6 +206,8 @@ async function main(): Promise<void> {
 
     // ---- Run 2: ONE real paid run ----
     const payableId = await seedInvoice(db.adminPool, sc, { amount: REAL_AMOUNT, invoiceNumber: "INV-DEMO-001", description: "DEMO payable invoice (sample data)" });
+    console.log("Waiting 65 s so the guard rate-limit window (30 requests per minute) is clear for the paid run...");
+    await new Promise((r) => setTimeout(r, 65_000));
     const fd = openSync(SINGLE_USE_FILE, "wx", 0o600); // throws EEXIST when the budget was already spent
     closeSync(fd);
     writeSingleUse({ startedAt: new Date().toISOString(), database: db.name, business_id: sc.businessId, invoice_id: payableId, amount: REAL_AMOUNT, treasury_before: treasuryBefore, supplier_before: supplierBefore });
@@ -163,6 +233,7 @@ async function main(): Promise<void> {
     const treasuryAfter = await bal(treasury.address);
     must(treasuryAfter !== null && amountsEqual(subtractAmounts(treasuryAfter, treasuryBefore), `-${REAL_AMOUNT}`), "treasury delta must be exactly -1");
     must(!isGreater(MIN_TREASURY_AFTER, treasuryAfter), "treasury must still hold >= 5 RLUSD");
+    await proveNoDoublePay(guard, db.adminPool, { businessId: sc.businessId, invoiceId: payableId, paymentId, hash, treasuryAddress: treasury.address, treasuryAfter, bal });
     writeSingleUse({ ...(JSON.parse(readFileSync(SINGLE_USE_FILE, "utf8")) as Record<string, unknown>), completed: true, treasury_after: treasuryAfter });
     console.log(`PAID: payment ${paymentId}, hash ${hash}, treasury ${treasuryBefore} -> ${treasuryAfter} RLUSD`);
     console.log(`Explorer: https://testnet.xrpl.org/transactions/${hash}`);

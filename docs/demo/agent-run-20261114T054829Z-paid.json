@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "label": "RECORDED RUN (not live)",
+  "recorded_at": "2026-11-14T05:48:29.281Z",
+  "ledger": "testnet",
+  "network": "xrpl-testnet",
+  "mode": "deterministic",
+  "effective_mode": "deterministic",
+  "trigger": "manual",
+  "status": "paid",
+  "summary": "Paid 1 RLUSD. The transaction was validated on the XRPL Testnet ledger.",
+  "decision_code": "ALLOWED",
+  "agent_reason": "Deterministic rule: earliest due date (2026-12-14) among 1 eligible invoices, amount 1 RLUSD. The payment guard decides.",
+  "tool_call_count": 5,
+  "payment": {
+    "id": "7aaa2d75-e41d-49e1-bec9-54601300ba69",
+    "tx_hash": "237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D",
+    "explorer_url": "https://testnet.xrpl.org/transactions/237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D"
+  },
+  "events": [
+    {
+      "kind": "tool_call",
+      "tool_name": "get_business_snapshot",
+      "ok": true,
+      "duration_ms": 474,
+      "input": {},
+      "output": {
+        "rlusd_balance": "17",
+        "minimum_reserve": "4",
+        "daily_remaining": "3",
+        "automation": "enabled",
+        "stale": false
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "list_open_invoices",
+      "ok": true,
+      "duration_ms": 1253,
+      "input": {
+        "limit": 20
+      },
+      "output": {
+        "count": 1,
+        "invoices": [
+          {
+            "invoice_id": "e8a3d9f7-5db7-421c-97f5-5e2defc26bec",
+            "due_date": "2026-12-14",
+            "amount": "1",
+            "eligible": true
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "get_invoice_details",
+      "ok": true,
+      "duration_ms": 996,
+      "input": {
+        "invoice_id": "e8a3d9f7-5db7-421c-97f5-5e2defc26bec"
+      },
+      "output": {
+        "invoice_id": "e8a3d9f7-5db7-421c-97f5-5e2defc26bec",
+        "eligible": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "input": {
+        "invoice_id": "e8a3d9f7-5db7-421c-97f5-5e2defc26bec",
+        "idempotency_key": "agent-c2460a5e39aa986c24b53d65cb94429c770d7918",
+        "agent_reason": "Deterministic rule: earliest due date (2026-12-14) among 1 eligible invoices, amount 1 RLUSD. The payment guard decides."
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "ok": true,
+      "duration_ms": 8899,
+      "input": {
+        "invoice_id": "e8a3d9f7-5db7-421c-97f5-5e2defc26bec",
+        "idempotency_key": "agent-c2460a5e39aa986c24b53d65cb94429c770d7918"
+      },
+      "output": {
+        "payment_id": "7aaa2d75-e41d-49e1-bec9-54601300ba69",
+        "status": "validated",
+        "decision_code": "ALLOWED",
+        "failure_code": null,
+        "amount": "1",
+        "tx_hash": "237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "get_payment_status",
+      "ok": true,
+      "duration_ms": 31,
+      "input": {
+        "payment_id": "7aaa2d75-e41d-49e1-bec9-54601300ba69"
+      },
+      "output": {
+        "count": 1,
+        "payments": [
+          {
+            "payment_id": "7aaa2d75-e41d-49e1-bec9-54601300ba69",
+            "status": "validated",
+            "tx_hash": "237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D"
+          }
+        ]
+      }
+    }
+  ]
+}
