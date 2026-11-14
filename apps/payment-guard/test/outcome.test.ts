@@ -63,6 +63,14 @@ describe("applyOutcome table (10.3, 5A.1, decision 3)", () => {
     expect(JSON.stringify(mem.audits)).not.toMatch(/DEADBEEF/);
   });
 
+  it("rejected_authorization -> failed SIGNING_KEY_REVOKED, reservation released, invoice open, one audit row without secrets", async () => {
+    const r = await apply({ kind: "rejected_authorization", hash: TX_HASH, engineResult: "tefBAD_AUTH" });
+    expect(r).toMatchObject({ status: "failed", failure_code: "SIGNING_KEY_REVOKED", result_code: "tefBAD_AUTH", signed_blob: null });
+    expect(mem.reservation).toBe("released");
+    expect(mem.invoice).toBe("open");
+    expect(mem.audits.map((a) => a.event_type)).toEqual(["payment.signing_key_revoked"]);
+    expect(JSON.stringify(mem.audits)).not.toMatch(/seed|blob/i);
+  });
   it("validated_failed -> failed with result and fee recorded, reservation released, invoice open", async () => {
     const r = await apply({ kind: "validated_failed", ...base, resultCode: "tecPATH_DRY" });
     expect(r).toMatchObject({ status: "failed", result_code: "tecPATH_DRY", fee_drops: "12", failure_code: "XRPL_SUBMISSION_FAILED", signed_blob: null });

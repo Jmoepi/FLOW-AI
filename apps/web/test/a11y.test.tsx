@@ -60,6 +60,10 @@ describe("axe-core (jsdom) finds no violations", () => {
     ["unavailable balance", { ...OVERVIEW, treasury: { rlusd_balance: null, as_of: null, source: "unavailable", age_seconds: null, stale: false } }, POLICY],
     ["empty queue and no runs", { ...OVERVIEW, queue: [], recent_payments: [], last_decision_code: null, agent: { state: "ready", last_run: null, run_request: null } }, POLICY],
     ["emergency stop on the last decision", { ...OVERVIEW, last_decision_code: "EXECUTION_DISABLED" }, POLICY],
+    ["signing key revoked", { ...OVERVIEW, signing_key: { state: "revoked" } }, POLICY],
+    ["signing key not set", { ...OVERVIEW, signing_key: { state: "not_set" } }, POLICY],
+    ["signing key on another regular key", { ...OVERVIEW, signing_key: { state: "other" } }, POLICY],
+    ["signing key unknown", { ...OVERVIEW, signing_key: { state: "unknown" } }, POLICY],
     ["run requested", { ...OVERVIEW, agent: { ...OVERVIEW.agent, run_request: { status: "open", requested_at: "2026-01-15T10:00:00.000Z" } } }, POLICY],
   ];
   it.each(OVERVIEW_STATES)("overview in the %s state", async (_name, data, policy) => {

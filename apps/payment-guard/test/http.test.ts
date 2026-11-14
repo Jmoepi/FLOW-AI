@@ -36,7 +36,7 @@ describe("authentication", () => {
     const { app } = await makeApp();
     const res = await app.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toEqual({ status: "unavailable", db: false, ledger: false, audit_chain: "unverified", audit_verified_at: null });
+    expect(res.json()).toEqual({ status: "unavailable", db: false, ledger: false, audit_chain: "unverified", audit_verified_at: null, signing_key: "master_env" });
     noLeak(res.body);
   });
 });

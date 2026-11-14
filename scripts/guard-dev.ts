@@ -1,6 +1,7 @@
 /**
  * Starts the payment guard locally against the local Docker database (.secrets/local-db.env), Testnet only.
  * Usage: pnpm guard:dev [-- --business <uuid>] [--enable-execution] [--supabase]
+ * --regular-key: sign with the revocable regular key from .secrets/guard-regular-key.env instead of the master (M7, 10.8).
  * --supabase: connect as flow_guard to the hosted Supabase database (session pooler, verified TLS; URL composed in memory
  * from .env DATABASE_URL host and .secrets/supabase-roles.env).
  * Prerequisites: pnpm db:up && pnpm db:migrate, and a seeded business. Nothing secret is printed.
@@ -17,22 +18,24 @@ import { loadRolePasswords, loadSupabaseTarget, supabaseCaFile, supabaseUrl } fr
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN_FILE = path.join(SECRETS_DIR, "guard-dev.env");
 const TOKEN_RE = /^[0-9a-f]{64}$/;
-function parseArgs(argv: readonly string[]): { businessId?: string; enableExecution: boolean; supabase: boolean } {
+function parseArgs(argv: readonly string[]): { businessId?: string; enableExecution: boolean; supabase: boolean; regularKey: boolean } {
   const args = argv.filter((a) => a !== "--");
   let businessId: string | undefined;
   let enableExecution = false;
   let supabase = false;
+  let regularKey = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--enable-execution") enableExecution = true;
     else if (a === "--supabase") supabase = true;
+    else if (a === "--regular-key") regularKey = true;
     else if (a === "--business") {
       const v = args[++i];
-      if (v === undefined || !UUID_RE.test(v)) throw new Error("Usage: guard-dev [--business <uuid>] [--enable-execution] [--supabase]");
+      if (v === undefined || !UUID_RE.test(v)) throw new Error("Usage: guard-dev [--business <uuid>] [--enable-execution] [--supabase] [--regular-key]");
       businessId = v;
-    } else throw new Error("Usage: guard-dev [--business <uuid>] [--enable-execution] [--supabase]");
+    } else throw new Error("Usage: guard-dev [--business <uuid>] [--enable-execution] [--supabase] [--regular-key]");
   }
-  return { ...(businessId !== undefined ? { businessId } : {}), enableExecution, supabase };
+  return { ...(businessId !== undefined ? { businessId } : {}), enableExecution, supabase, regularKey };
 }
 /** Reads the dev token from the gitignored file, generating it (mode 0600) when absent or malformed. Never printed. */
 function loadDevToken(): string {
@@ -51,7 +54,7 @@ function loadDevToken(): string {
   return token;
 }
 function main(): void {
-  const { businessId, enableExecution, supabase } = parseArgs(process.argv.slice(2));
+  const { businessId, enableExecution, supabase, regularKey } = parseArgs(process.argv.slice(2));
   const secrets = supabase ? null : loadLocalDbSecrets(SECRETS_DIR, false);
   if (!supabase && secrets === null) throw new Error("No local database set up. Run: pnpm db:up && pnpm db:migrate");
   const treasury = readPublicWallets().find((w) => w.role === "treasury");
@@ -67,6 +70,7 @@ function main(): void {
     databaseUrl,
     port: 4002,
     treasuryLabel: treasury.label,
+    signerMode: regularKey ? "regular_key" : "master_env",
     executionEnabled: enableExecution,
     token: loadDevToken(),
     ...(businessId !== undefined ? { businessId } : {}),

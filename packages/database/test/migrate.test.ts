@@ -67,7 +67,7 @@ describe("parseMigrateArgs", () => {
 describe("loadMigrations", () => {
   const files = loadMigrations();
   it("loads the ordered set with stable sha256 checksums", () => {
-    expect(files.map((f) => f.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010"]);
+    expect(files.map((f) => f.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"]);
     for (const f of files) expect(f.checksum).toMatch(/^[0-9a-f]{64}$/);
     expect(loadMigrations().map((f) => f.checksum)).toEqual(files.map((f) => f.checksum));
   });

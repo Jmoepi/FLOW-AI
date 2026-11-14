@@ -10,6 +10,13 @@ const TF_PARTIAL_PAYMENT = 0x00020000;
 const DEFAULT_LEDGER_WINDOW = 20; // about 1-2 minutes on Testnet
 const MAX_LEDGER_WINDOW = 40;
 
+/**
+ * Submit results that mean "the signing key is not authorised for this account" (M7, 19.2 resolved).
+ * Verified on Testnet: a blob signed by a REVOKED regular key is refused at submit with tefBAD_AUTH
+ * ("Transaction's public key is not authorized.") and never reaches a ledger. Only codes proven by experiment belong here.
+ */
+export const SIGNING_KEY_REJECTION_CODES: readonly string[] = ["tefBAD_AUTH"];
+
 export interface Signer {
   address: string;
   /** Signs a prepared transaction. The hash is known here, before any submit. */
@@ -49,6 +56,8 @@ export type PaymentOutcome =
   | { kind: "partial_delivery"; hash: string; ledgerIndex: number; resultCode: string; deliveredAmount: unknown; feeDrops?: string | undefined }
   /** Uncertain: keep PENDING_CONFIRMATION and reconcile later. Never resubmit under a new sequence. */
   | { kind: "pending"; hash: string; lastLedgerSequence: number; validatedLedgerIndex: number; seenOnLedger: boolean; reason: string }
+  /** The server refused the signature at submit (revoked or wrong regular key). Nothing is in any ledger and nothing can validate. */
+  | { kind: "rejected_authorization"; hash: string; engineResult: string }
   /** Definitive: a validated ledger beyond LastLedgerSequence exists and the tx is in no validated ledger. */
   | { kind: "failed_expired"; hash: string; lastLedgerSequence: number; validatedLedgerIndex: number };
 
@@ -161,6 +170,12 @@ export async function submitAndWait(
     try {
       const ack = await gw.submitBlob(signed.txBlob);
       await emit({ type: "submitted", ack });
+      if (SIGNING_KEY_REJECTION_CODES.includes(ack.engineResult)) {
+        // The signature itself is refused: this blob can never validate. Final, never retried or re-signed here.
+        const rejected: PaymentOutcome = { kind: "rejected_authorization", hash: signed.hash, engineResult: ack.engineResult };
+        await emit({ type: "outcome", outcome: rejected });
+        return rejected;
+      }
     } catch (err) {
       // The submit may or may not have reached the network: treat as uncertain and keep polling by hash.
       await emit({ type: "submit_error", message: redactError(err) });

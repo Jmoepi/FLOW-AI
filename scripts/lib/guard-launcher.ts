@@ -6,7 +6,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
-import { ROOT, loadConfig, loadGuardSignerSeed } from "./common";
+import { existsSync, readFileSync } from "node:fs";
+import { ROOT, SECRETS_DIR, loadConfig, loadGuardSignerSeed } from "./common";
+import { parseRegularKeySeed } from "./owner-key";
+
+/** Default guard regular-key file (gitignored). */
+export const GUARD_REGULAR_KEY_FILE = path.join(SECRETS_DIR, "guard-regular-key.env");
 
 export interface GuardLaunchOptions {
   /** Connection string for the flow_guard role. Passed to the child via env only. */
@@ -16,6 +21,13 @@ export interface GuardLaunchOptions {
   treasuryLabel: string;
   /** Kill switch value for the child. Defaults to true (m3-e2e); pass false for a smoke test that must not pay. */
   executionEnabled?: boolean;
+  /**
+   * Which key the guard signs with (M7). "regular_key": the child gets ONLY XRPL_REGULAR_KEY_SEED (from regularKeyFile) and
+   * never the master seed. Default "master_env" (dev mode).
+   */
+  signerMode?: "master_env" | "regular_key";
+  /** Overrides the regular-key file (proof of a revoked key). */
+  regularKeyFile?: string;
   /** Fixed bearer token (dev only, read from a gitignored file). Random per launch when omitted. */
   token?: string;
 }
@@ -42,6 +54,15 @@ export function baseGuardEnv(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 export function killSwitchValue(opts: Pick<GuardLaunchOptions, "executionEnabled">): "true" | "false" {
   return opts.executionEnabled === false ? "false" : "true";
 }
+/** The ONLY signing seed the child receives: the master in dev mode, or the revocable regular key (never both). */
+function signerEnv(opts: Pick<GuardLaunchOptions, "signerMode" | "regularKeyFile" | "treasuryLabel">): Record<string, string> {
+  if (opts.signerMode !== "regular_key") return { XRPL_DEMO_SIGNER_SEED: loadGuardSignerSeed(opts.treasuryLabel) };
+  const file = opts.regularKeyFile ?? GUARD_REGULAR_KEY_FILE;
+  const seed = existsSync(file) ? parseRegularKeySeed(readFileSync(file, "utf8")) : null;
+  if (seed === null) throw new Error("No guard regular key found. Run `pnpm owner:set-regular-key --confirm` first.");
+  return { XRPL_REGULAR_KEY_SEED: seed };
+}
+
 export function startGuard(opts: GuardLaunchOptions): GuardHandle {
   const cfg = loadConfig(); // fails closed unless Testnet
   const token = opts.token ?? randomBytes(32).toString("hex");
@@ -57,7 +78,7 @@ export function startGuard(opts: GuardLaunchOptions): GuardHandle {
     GUARD_PORT: String(opts.port),
     GUARD_HOST: "127.0.0.1",
     PAYMENT_EXECUTION_ENABLED: killSwitchValue(opts),
-    XRPL_DEMO_SIGNER_SEED: loadGuardSignerSeed(opts.treasuryLabel),
+    ...signerEnv(opts),
   });
   if (opts.businessId !== undefined) env.GUARD_BUSINESS_ID = opts.businessId;
   const child = spawn(process.execPath, ["--import", "tsx", path.join("apps", "payment-guard", "src", "main.ts")], {

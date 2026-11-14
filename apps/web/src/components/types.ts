@@ -24,6 +24,8 @@ export interface OverviewData {
   limits: { minimum_reserve: string; max_payment_amount: string };
   automation: { state: "paused" | "expired" | "needs_attention" | "active"; enabled: boolean; valid_until: string | null };
   invoices: { open: number; blocked: number; processing: number };
+  /** Read-only status of the guard's signing key (M7). The dashboard never holds or asks for a key. */
+  signing_key: { state: "revoked" | "active" | "other" | "not_set" | "unknown" };
   agent: {
     state: "ready" | "running" | "paused" | "needs_attention";
     last_run: { id: string; started_at: string; status: string; trigger: string; decision_code: string | null; invoice_number: string | null } | null;

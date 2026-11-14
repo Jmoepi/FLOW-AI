@@ -4,7 +4,7 @@ import type { MoneyString } from "@flow-ai/contracts";
 import { DbError } from "../errors";
 import { iso, isoOrNull, moneyIn, moneyOut, moneyOutOrNull, run, runOne, uuid, type Queryable } from "../db";
 import { withTransaction } from "../tx";
-import type { ActorType } from "./types";
+import type { ActorType, RegularKeyState, SigningKeyMode } from "./types";
 /**
  * Repositories for the owner web app (role flow_web). Every tenant read/write takes the business id from the verified
  * session, and the database ALSO enforces it: withWebTx sets the transaction-local app.business_id that the RLS policies
@@ -412,16 +412,18 @@ export interface OverviewData {
   rlusd_balance: MoneyString | null;
   balance_as_of: string | null;
   held_today: MoneyString;
+  /** Guard signing key (M7): the stored mode and the latest observed RegularKey state. Public status only. */
+  signing_key: { mode: SigningKeyMode; regular_key_state: RegularKeyState | null } | null;
   invoice_counts: { open: number; blocked: number; processing: number };
 }
 export async function getOverviewData(q: Queryable, businessId: string, businessDate: string): Promise<OverviewData> {
   const id = uuid(businessId);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)) throw new DbError("INVALID_INPUT");
-  const snap = await runOne<{ wallet_id: string; rlusd_balance: unknown; as_of: unknown }>(
+  const snap = await runOne<{ wallet_id: string; rlusd_balance: unknown; as_of: unknown; signing_key_mode: SigningKeyMode; regular_key_state: RegularKeyState | null }>(
     q,
-    `SELECT w.id AS wallet_id, s.rlusd_balance, s.as_of
+    `SELECT w.id AS wallet_id, w.signing_key_mode, s.rlusd_balance, s.as_of, s.regular_key_state
        FROM treasury_wallets w LEFT JOIN LATERAL (
-         SELECT rlusd_balance, as_of FROM balance_snapshots WHERE wallet_id = w.id ORDER BY as_of DESC, id LIMIT 1
+         SELECT rlusd_balance, as_of, regular_key_state FROM balance_snapshots WHERE wallet_id = w.id ORDER BY as_of DESC, id LIMIT 1
        ) s ON true
       WHERE w.business_id = $1 AND w.is_active ORDER BY w.created_at, w.id LIMIT 1`,
     [id],
@@ -442,6 +444,7 @@ export async function getOverviewData(q: Queryable, businessId: string, business
     rlusd_balance: moneyOutOrNull(snap?.rlusd_balance ?? null),
     balance_as_of: snap?.as_of === undefined || snap.as_of === null ? null : iso(snap.as_of),
     held_today: moneyOut(typeof held?.total === "string" ? held.total : "0"),
+    signing_key: snap ? { mode: snap.signing_key_mode, regular_key_state: snap.regular_key_state ?? null } : null,
     invoice_counts: { open: n("open"), blocked: n("blocked"), processing: n("processing") },
   };
 }

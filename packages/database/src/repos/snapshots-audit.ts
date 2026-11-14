@@ -1,6 +1,6 @@
 import { DbError } from "../errors";
 import { iso, moneyIn, moneyOut, moneyOutOrNull, run, runOne, uuid, type Queryable } from "../db";
-import type { ActorType, AuditRow, SnapshotRow } from "./types";
+import type { ActorType, AuditRow, RegularKeyState, SnapshotRow } from "./types";
 
 interface SnapshotDbRow {
   id: string;
@@ -9,21 +9,22 @@ interface SnapshotDbRow {
   xrp_balance: unknown;
   as_of: unknown;
   ledger_index: number | null;
+  regular_key_state: RegularKeyState | null;
 }
 
 function mapSnapshot(r: SnapshotDbRow): SnapshotRow {
-  return { id: r.id, wallet_id: r.wallet_id, rlusd_balance: moneyOutOrNull(r.rlusd_balance), xrp_balance: moneyOut(r.xrp_balance), as_of: iso(r.as_of), ledger_index: r.ledger_index };
+  return { id: r.id, wallet_id: r.wallet_id, rlusd_balance: moneyOutOrNull(r.rlusd_balance), xrp_balance: moneyOut(r.xrp_balance), as_of: iso(r.as_of), ledger_index: r.ledger_index, regular_key_state: r.regular_key_state };
 }
 
 export async function insertSnapshot(
   q: Queryable,
-  s: { wallet_id: string; rlusd_balance: string | null; xrp_balance: string; ledger_index: number | null },
+  s: { wallet_id: string; rlusd_balance: string | null; xrp_balance: string; ledger_index: number | null; regular_key_state?: RegularKeyState | null },
 ): Promise<SnapshotRow> {
   const row = await runOne<SnapshotDbRow>(
     q,
-    `INSERT INTO balance_snapshots (wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index)
-     VALUES ($1, $2, $3, now(), $4) RETURNING id, wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index`,
-    [uuid(s.wallet_id), s.rlusd_balance === null ? null : moneyIn(s.rlusd_balance, true), moneyIn(s.xrp_balance, true), s.ledger_index],
+    `INSERT INTO balance_snapshots (wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index, regular_key_state)
+     VALUES ($1, $2, $3, now(), $4, $5) RETURNING id, wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index, regular_key_state`,
+    [uuid(s.wallet_id), s.rlusd_balance === null ? null : moneyIn(s.rlusd_balance, true), moneyIn(s.xrp_balance, true), s.ledger_index, s.regular_key_state ?? null],
   );
   if (!row) throw new DbError("DB_ERROR");
   return mapSnapshot(row);
@@ -32,7 +33,7 @@ export async function insertSnapshot(
 export async function getLatestSnapshot(q: Queryable, walletId: string): Promise<SnapshotRow | null> {
   const r = await runOne<SnapshotDbRow>(
     q,
-    `SELECT id, wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index
+    `SELECT id, wallet_id, rlusd_balance, xrp_balance, as_of, ledger_index, regular_key_state
        FROM balance_snapshots WHERE wallet_id = $1 ORDER BY as_of DESC, id LIMIT 1`,
     [uuid(walletId)],
   );

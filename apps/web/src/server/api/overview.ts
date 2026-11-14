@@ -5,6 +5,16 @@ import { HttpError, jsonResponse } from "../http/errors";
 import { defineRoute } from "../http/route";
 import { invoiceView } from "./invoices";
 import { paymentView } from "./payments";
+/** Guard signing key as shown to the owner (M7). Derived from stored, public facts only: never a key or a seed. */
+export type SigningKeyView = "revoked" | "active" | "other" | "not_set" | "unknown";
+export function signingKeyView(sk: { mode: string; regular_key_state: string | null } | null): SigningKeyView {
+  if (sk === null) return "unknown";
+  if (sk.mode === "revoked") return "revoked";
+  if (sk.regular_key_state === "active") return "active";
+  if (sk.regular_key_state === "other") return "other";
+  if (sk.regular_key_state === "not_set") return "not_set";
+  return "unknown";
+}
 export type AutomationState = "paused" | "expired" | "needs_attention" | "active";
 export type AgentState = "ready" | "running" | "paused" | "needs_attention";
 const RUN_PROBLEMS = new Set(["failed", "timed_out", "interrupted"]);
@@ -70,6 +80,7 @@ export const overviewRoute = defineRoute({
       limits: { minimum_reserve: policy.minimum_reserve, max_payment_amount: policy.max_payment_amount },
       automation: { state, enabled: policy.enabled, valid_until: policy.valid_until },
       invoices: overview.invoice_counts,
+      signing_key: { state: signingKeyView(overview.signing_key) },
       agent: {
         state: agentState,
         last_run:

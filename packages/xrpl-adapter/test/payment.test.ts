@@ -6,6 +6,7 @@ import {
   assertTestnetConfig,
   parseAmount,
   reconcilePayment,
+  SIGNING_KEY_REJECTION_CODES,
   sendIouPayment,
   submitAndWait,
   walletSigner,
@@ -144,6 +145,34 @@ describe("network assertion", () => {
   });
 });
 
+describe("rejected signing key (M7, 19.2: tefBAD_AUTH)", () => {
+  const ref = { hash: "CD".repeat(32), lastLedgerSequence: 1020, firstLedgerSequence: 990 };
+  const rejecting = (code: string) => {
+    const gw = new FakeGateway();
+    gw.submitBlob = async (blob: string) => {
+      gw.submits.push(blob);
+      return { engineResult: code };
+    };
+    return gw;
+  };
+  it("lists exactly the experimentally verified code", () => {
+    expect(SIGNING_KEY_REJECTION_CODES).toEqual(["tefBAD_AUTH"]);
+  });
+  it("tefBAD_AUTH at submit is final: rejected_authorization, one submit, no polling, no resubmit", async () => {
+    const gw = rejecting("tefBAD_AUTH");
+    const events: PaymentEvent[] = [];
+    const out = await submitAndWait(gw, { ...ref, txBlob: "BLOB", amount: expected }, fastWait(events));
+    expect(out).toEqual({ kind: "rejected_authorization", hash: ref.hash, engineResult: "tefBAD_AUTH" });
+    expect(gw.submits).toHaveLength(1);
+    expect(events.some((e) => e.type === "poll")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "outcome", outcome: { kind: "rejected_authorization" } });
+  });
+  it.each(["tefPAST_SEQ", "tefMAX_LEDGER", "telINSUF_FEE_P", "terQUEUED", "tecNO_DST"])("%s is NOT treated as a rejected key", async (code) => {
+    const gw = rejecting(code);
+    const out = await submitAndWait(gw, { ...ref, txBlob: "BLOB", amount: expected }, { ...fastWait(), timeoutMs: 3000 });
+    expect(out.kind).not.toBe("rejected_authorization");
+  });
+});
 describe("payment flow outcomes", () => {
   it("validated tesSUCCESS with matching delivered_amount -> validated_success", async () => {
     const gw = new FakeGateway();

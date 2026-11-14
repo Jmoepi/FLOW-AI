@@ -15,6 +15,13 @@ const STATE: Record<OverviewData["automation"]["state"], { tone: Tone; icon: Ico
   expired: { tone: "warn", icon: "clock", label: "Policy expired", text: "The policy validity date has passed, so every payment request is blocked. Set a new date in Payment policies." },
   needs_attention: { tone: "warn", icon: "warn", label: "Needs attention", text: "Automation is on, but some invoices are blocked by a rule and need your review." },
 };
+const SIGNING_KEY: Record<OverviewData["signing_key"]["state"], { tone: Tone; icon: IconKey; label: string; text: string }> = {
+  active: { tone: "ok", icon: "check", label: "Regular key active", text: "The guard signs with a revocable key. Your treasury's master key stays with you and is not on this server." },
+  not_set: { tone: "neutral", icon: "dot", label: "No regular key registered", text: "The guard is not using a revocable key. Register one with the owner script on your own computer." },
+  other: { tone: "warn", icon: "warn", label: "Different regular key on the ledger", text: "A regular key is registered that this guard does not use. Check it with the owner script." },
+  revoked: { tone: "bad", icon: "ban", label: "Signing key revoked", text: "The ledger refused the guard's signing key. Payments are blocked and nothing was moved. Register a new key with the owner script to resume." },
+  unknown: { tone: "neutral", icon: "dot", label: "Not reported yet", text: "The guard has not reported its signing key state yet." },
+};
 const AGENT: Record<OverviewData["agent"]["state"], { tone: Tone; icon: IconKey; label: string }> = {
   ready: { tone: "ok", icon: "check", label: "Ready" },
   running: { tone: "neutral", icon: "clock", label: "Running" },
@@ -76,6 +83,16 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
       <p>
         The agent can only pay <a href="/suppliers">suppliers you approved</a>.
       </p>
+      <section className="panel" aria-labelledby="key-title">
+        <h2 id="key-title">Guard signing key</h2>
+        <p role={data.signing_key.state === "revoked" ? "alert" : undefined}>
+          <StatusBadge tone={SIGNING_KEY[data.signing_key.state].tone} icon={SIGNING_KEY[data.signing_key.state].icon} label={SIGNING_KEY[data.signing_key.state].label} />{" "}
+          <span>{SIGNING_KEY[data.signing_key.state].text}</span>
+        </p>
+        <p className="hint">
+          To revoke the guard key at any time, run <code>pnpm owner:revoke-regular-key --confirm</code> on your own computer. This dashboard only shows the status. It never asks for or stores your master seed.
+        </p>
+      </section>
       <section className="panel" aria-labelledby="agent-title">
         <h2 id="agent-title">Treasury agent</h2>
         <p>

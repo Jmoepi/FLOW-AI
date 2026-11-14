@@ -1,7 +1,9 @@
 import { redactError } from "@flow-ai/contracts";
 import { insertSnapshot, listActiveWallets } from "@flow-ai/database";
 import { Dec, formatMoney, parseMoney } from "@flow-ai/policy-engine";
+import { regularKeyAddress } from "../signer/signer";
 import type { ServiceDeps } from "../services/payments";
+import { classifyRegularKey } from "../state/signing-key";
 import { createLoop, type Loop } from "./loop";
 
 /** Integer drops to an exact XRP decimal string using BigInt only (G-4). */
@@ -34,7 +36,12 @@ export async function pollBalances(deps: ServiceDeps): Promise<number> {
       const snap = await gateway.getAccountSnapshot(wallet.address, config.rlusd.issuer, config.rlusd.currencyHex);
       const xrp = dropsToXrp(snap.xrpDrops);
       if (xrp === null) throw new Error("unexpected XRP balance format");
-      await insertSnapshot(pool, { wallet_id: wallet.id, rlusd_balance: storableBalance(snap.rlusdBalance), xrp_balance: xrp, ledger_index: snap.ledgerIndex });
+      // Read-only observation of the ledger RegularKey against the configured guard key ADDRESS (public). Informational.
+      const configured = regularKeyAddress(deps.env());
+      const regular_key_state = deps.signingKey
+        ? await deps.signingKey.observe(wallet, { regularKey: snap.regularKey, configuredAddress: configured, ledgerIndex: snap.ledgerIndex })
+        : classifyRegularKey(snap.regularKey, configured);
+      await insertSnapshot(pool, { wallet_id: wallet.id, rlusd_balance: storableBalance(snap.rlusdBalance), xrp_balance: xrp, ledger_index: snap.ledgerIndex, regular_key_state });
       written++;
     } catch (err) {
       logger.warn("balance_poll.failed", { wallet_id: wallet.id, error: redactError(err) });

@@ -140,6 +140,8 @@ function describe(o: PaymentOutcome): string {
       return `PARTIAL_DELIVERY ${o.resultCode} in ledger ${o.ledgerIndex}, delivered_amount ${JSON.stringify(o.deliveredAmount)}`;
     case "failed_expired":
       return `FAILED_EXPIRED: validated ledger ${o.validatedLedgerIndex} is past LastLedgerSequence ${o.lastLedgerSequence} and the tx is in no validated ledger`;
+    case "rejected_authorization":
+      return `REJECTED_AUTHORIZATION ${o.engineResult}: the signing key is not authorised; nothing was submitted to a ledger`;
     case "pending":
       return `PENDING_CONFIRMATION (${o.reason}); LastLedgerSequence ${o.lastLedgerSequence}, validated ledger ${o.validatedLedgerIndex}`;
   }

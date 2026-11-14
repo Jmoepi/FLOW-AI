@@ -18,7 +18,7 @@ export interface WalletRow {
   address: string;
   asset_currency: string;
   asset_issuer: string;
-  signing_key_mode: "master_env" | "regular_key" | "revoked";
+  signing_key_mode: SigningKeyMode;
   is_active: boolean;
 }
 
@@ -106,6 +106,9 @@ export interface ReservationRow {
   updated_at: string;
 }
 
+/** What the poller observed about the treasury's RegularKey (M7). Read-only and informational. */
+export type RegularKeyState = "active" | "not_set" | "other" | "not_configured";
+export type SigningKeyMode = "master_env" | "regular_key" | "revoked";
 export interface SnapshotRow {
   id: string;
   wallet_id: string;
@@ -113,6 +116,7 @@ export interface SnapshotRow {
   xrp_balance: MoneyString;
   as_of: string;
   ledger_index: number | null;
+  regular_key_state: RegularKeyState | null;
 }
 
 export interface AuditRow {

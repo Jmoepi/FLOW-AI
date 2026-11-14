@@ -7,6 +7,7 @@ import { createAuditIntegrity, createAuditVerifier } from "./jobs/audit-verify";
 import { createBalancePoller } from "./jobs/balance-poller";
 import { createReconciler } from "./jobs/reconcile";
 import { createSweeper } from "./jobs/sweeper";
+import { createSigningKeyHealth } from "./state/signing-key";
 import { createLogger } from "./logger";
 import { createExecutor } from "./services/execute";
 import type { ServiceDeps } from "./services/payments";
@@ -21,7 +22,9 @@ async function main(): Promise<void> {
   assertLeastPrivilegeRole(await getCurrentRoleFlags(pool));
   const gateway = await XrplGateway.connect(config.network, { wsUrl: config.wsUrl });
   const integrity = createAuditIntegrity({ pool, config, env: () => process.env, logger });
-  const base: ServiceDeps = { pool, gateway, config, env: () => process.env, logger, integrity };
+  const signingKey = createSigningKeyHealth({ pool, config, env: () => process.env, logger });
+  await signingKey.hydrate();
+  const base: ServiceDeps = { pool, gateway, config, env: () => process.env, logger, integrity, signingKey };
   const executor = createExecutor(base);
   const deps: ServiceDeps = { ...base, executor };
   const reconciler = createReconciler(deps);

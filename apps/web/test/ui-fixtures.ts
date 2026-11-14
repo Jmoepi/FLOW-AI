@@ -63,6 +63,7 @@ export const OVERVIEW: OverviewData = {
   limits: { minimum_reserve: "250", max_payment_amount: "500" },
   automation: { state: "active", enabled: true, valid_until: null },
   invoices: { open: 2, blocked: 1, processing: 0 },
+  signing_key: { state: "active" },
   agent: { state: "ready", last_run: { id: "11111111-1111-4111-8111-111111111111", started_at: "2026-01-15T10:00:00.000Z", status: "paid", trigger: "manual", decision_code: null, invoice_number: "INV-1001" }, run_request: null },
   last_decision_code: "DAILY_LIMIT_EXCEEDED",
   queue: [INVOICE_BLOCKED, INVOICE_OPEN],

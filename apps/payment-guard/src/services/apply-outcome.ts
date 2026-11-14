@@ -84,6 +84,12 @@ export async function applyOutcomeIn(c: PoolClient, paymentId: string, outcome: 
       return finish(c, actor, p, "failed", "released", {
         failure_code: "XRPL_SUBMISSION_FAILED", failure_message: "Transaction expired before validation (LastLedgerSequence passed).",
       }, "payment.expired", { tx_hash: p.tx_hash, last_ledger_sequence: outcome.lastLedgerSequence, validated_ledger: outcome.validatedLedgerIndex });
+    case "rejected_authorization":
+      // Nothing can have left the wallet: release the reservation and reopen the invoice. A dedicated code, never a generic failure.
+      return finish(c, actor, p, "failed", "released", {
+        ...opt("result_code", safeResultCode(outcome.engineResult)), failure_code: "SIGNING_KEY_REVOKED",
+        failure_message: "The guard signing key was rejected by the ledger. Execution is blocked until the owner restores a valid key.",
+      }, "payment.signing_key_revoked", { tx_hash: p.tx_hash, engine_result: outcome.engineResult });
     case "pending": {
       const wasSubmitted = p.status === "submitted";
       // submitted -> pending_confirmation; a repeat on pending_confirmation only touches updated_at so the reconciler rotates.

@@ -1094,6 +1094,7 @@ Use stable codes such as:
 - `XRPL_SUBMISSION_FAILED`
 - `PARTIAL_DELIVERY`
 - `VALIDATION_PENDING`
+- `SIGNING_KEY_REVOKED`: the ledger refused the guard's regular key (`tefBAD_AUTH`, sections 10.7 and 19.2). The payment is `FAILED`, the guard is degraded and execution stops until the owner registers a valid key. Added in M7.
 
 The M2 policy engine also emits the following codes (additions to the list above):
 - `INVALID_REQUEST`: the evaluation request is malformed, has an invalid time or an unknown business timezone, or `agent_reason` exceeds 280 characters.
@@ -2057,7 +2058,7 @@ None of the following could be confirmed from the sources reviewed. Treat each a
 - [ ] **Amount of RLUSD** the `tryrlusd.com` faucet provides, and any rate limits.
 - [ ] **Supplier trust-line behaviour:** whether the issuer imposes extra requirements (authorisation, freeze) on scripted supplier accounts.
 - [ ] **Amendment status** of anything beyond `Payment`, `TrustSet` and `SetRegularKey`, at `livenet.xrpl.org/amendments`.
-- [ ] **Exact failure code** when a revoked regular key signs a transaction (expected authorisation failure; confirm on Testnet).
+- [x] **Exact failure code** when a revoked regular key signs a transaction: resolved on Testnet in M7. The ledger refuses it at submit with `tefBAD_AUTH` ("Transaction's public key is not authorized."); it never reaches a ledger and no fee is charged. See `docs/m7-notes.md`.
 - [ ] **Current Anthropic model id** for `AI_MODEL`.
 - [ ] **Judging weights, dates and prize terms** in the Participant Hub.
 - [ ] **Capabilities of Privy and Open Wallet Standard** before relying on them as signer backends.

@@ -51,9 +51,11 @@ export function registerPublicRoutes(app: FastifyInstance, deps: ServiceDeps): v
     // Flags only (L-2): the kill switch variable is no longer reported. The audit chain result is a state word and a
     // timestamp, never a business id, row or hash.
     const audit = deps.integrity?.status(deps.env()) ?? { state: "unverified" as const, last_checked_at: null, blocked: false };
+    const signing = deps.signingKey?.status(deps.env()) ?? { mode: "master_env" as const, blocked: false };
     const up = db && ledger;
-    const status = !up ? "unavailable" : audit.blocked ? "degraded" : "ok";
-    return reply.code(up && !audit.blocked ? 200 : 503).send({ status, db, ledger, audit_chain: audit.state, audit_verified_at: audit.last_checked_at });
+    const degraded = audit.blocked || signing.blocked; // a rejected signing key blocks execution (fail closed, M7)
+    const status = !up ? "unavailable" : degraded ? "degraded" : "ok";
+    return reply.code(up && !degraded ? 200 : 503).send({ status, db, ledger, audit_chain: audit.state, audit_verified_at: audit.last_checked_at, signing_key: signing.mode });
   });
 }
 /** Every route here sits behind the bearer-token hook installed by the caller (AZ-1). */

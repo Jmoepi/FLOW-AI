@@ -1,5 +1,8 @@
 import { redactError } from "@flow-ai/contracts";
-import { Client, isValidClassicAddress, type Payment } from "xrpl";
+import { Client, isValidClassicAddress, type Payment, type SubmittableTransaction } from "xrpl";
+
+/** Ledger flag bit lsfDisableMaster: read only here, to REPORT it. Nothing in this repository sets it. */
+const LSF_DISABLE_MASTER = 0x00100000;
 
 export const TESTNET_NETWORK = "xrpl-testnet";
 export const TESTNET_NETWORK_ID = 1;
@@ -112,6 +115,10 @@ export interface AccountSnapshot {
   rlusdBalance: string | null;
   /** Validated ledger the snapshot was read from. */
   ledgerIndex: number;
+  /** The account's RegularKey address (public), or null when none is set. Read-only observation (10.6). */
+  regularKey: string | null;
+  /** True when the master key is disabled (lsfDisableMaster). Read-only. */
+  masterDisabled: boolean;
 }
 
 export interface Reserves {
@@ -282,7 +289,15 @@ export class XrplGateway implements GuardLedgerGateway {
       ownerCount: Number(data.OwnerCount),
       rlusdBalance,
       ledgerIndex: Number(info.ledger_index),
+      regularKey: typeof data.RegularKey === "string" ? data.RegularKey : null,
+      masterDisabled: ((Number(data.Flags) || 0) & LSF_DISABLE_MASTER) !== 0,
     };
+  }
+
+  /** Generic (non-Payment) reads and writes used only by the owner key scripts (M7). */
+  async autofillTx(tx: SubmittableTransaction): Promise<SubmittableTransaction> {
+    await this.ensureConnected();
+    return this.client.autofill(tx);
   }
 
   async getReserves(): Promise<Reserves> {
