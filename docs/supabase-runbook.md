@@ -1,6 +1,6 @@
 # Supabase runbook
 
-Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0008 verified there; 0009 and 0010 are new in M6 and still to be applied by the owner with `pnpm db:migrate --allow-remote`, app roles, demo seed, smoke test). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
+Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0011 applied there; 0009 to 0011 were applied with `pnpm db:migrate --allow-remote` after the first run. `pnpm db:supabase:verify` reports 4 failed checks after 0009 to 0011 (see "Open verify findings")). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
 
 ## Verified procedure (run against the real project, session pooler)
 
@@ -26,6 +26,12 @@ Findings from the real run:
 - Denied writes (each inside a transaction that is rolled back): both app roles get SQLSTATE 42501 for DELETE and TRUNCATE on payments and audit_events, UPDATE on audit_events, writes to businesses and treasury_wallets; `flow_web` is also denied INSERT and UPDATE on payments and UPDATE of invoice amounts; `flow_guard` is denied writes to treasury_policies. `flow_web` sees zero tenant rows without `app.business_id`. The audit chain triggers (`audit_chain`, `audit_immutable`, `audit_no_truncate`), the chain functions and the key and check constraints exist.
 - Smoke test (kill switch OFF): guard `/readyz` returned db ok, ledger ok, audit_chain ok. Web login through the real flow (Origin check, then a session cookie and CSRF token) returned 200; a wrong password 401; a foreign Origin 403; policy, overview and suppliers 200 (3 suppliers); logout without the CSRF token 403, with it 200, and the policy is 401 afterwards. `pnpm agent:run` ended with no payment, and `-- --probe-ineligible` ended `blocked` with `EXECUTION_DISABLED`. Nothing was sent to the ledger.
 
+
+## Open verify findings (after 0009 to 0011 were applied)
+`pnpm db:supabase:verify` passes the RLS check (18 of 18 tables), role attributes and the anon/authenticated table checks, and fails 4 checks:
+- `anon`, `authenticated` and PUBLIC can EXECUTE one public function. It is the trigger function `treasury_wallet_signing_key_transition()` added by 0011, which has PostgreSQL's default PUBLIC EXECUTE. A trigger function is not callable as a plain function, so the exposure is low, but the check is strict. Fix: a later migration with `REVOKE ALL ON FUNCTION treasury_wallet_signing_key_transition() FROM PUBLIC`.
+- `flow_web` holds one DELETE grant. It is the intended `DELETE ON login_attempts` of 0010 (limited by a row policy to windows older than one day). The check needs an allowance for that table.
+Neither fix has been applied to the Supabase project; both need the owner's decision.
 
 ## 1. Create the project
 

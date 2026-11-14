@@ -1,5 +1,5 @@
 # M5 notes: agent and MCP tools
-Scope: `apps/agent` (agent loop, MCP tool server, provider adapter), guard run-record and read endpoints, migration `0007_agent_runs.sql`, the web "Agent activity" page, and the `agent:run` / `agent:demo` scripts. Local Docker Postgres only. No Supabase project was contacted. No LLM network call was made and no API key exists. No RLUSD was spent in M5 (see "Real payment status").
+Scope: `apps/agent` (agent loop, MCP tool server, provider adapter), guard run-record and read endpoints, migration `0007_agent_runs.sql`, the web "Agent activity" page, and the `agent:run` / `agent:demo` scripts. Local Docker Postgres only. No Supabase project was contacted. No LLM network call was made and no API key exists. One real agent payment of 1 RLUSD was made later (see "Real payment status").
 
 ## Design
 - The agent is an actor, not a chatbot (spec 1.2, 2.5). It talks to the guard only through the five MCP tools, and the tool server talks to the guard only over HTTP with the bearer token. The guard rebuilds the payment from its own records and remains the only decision maker in both modes.
@@ -60,7 +60,22 @@ Switch to LLM mode: put `AGENT_MODE=llm`, `AI_MODEL=<model id from the provider 
 
 ## Real payment status
 The treasury held exactly 5 RLUSD at the time of M5 (after the M3 payment), below the 6 RLUSD gate. The real agent payment was therefore SKIPPED and no RLUSD was spent. The read-only gate is `pnpm agent:demo -- --check-treasury`. A genuine blocked run against the real guard (kill switch off, live Testnet reads, nothing submitted) is recorded in `docs/demo/` (`status: blocked`, `decision_code: EXECUTION_DISABLED`, no `tx_hash`). The full paid flow (paid with validated hash, audit chain intact, one payment per run, concurrency, crash recovery) is verified against the fake XRPL gateway in `pnpm test:db`.
-Pending: claim 10 RLUSD at https://tryrlusd.com/ for the treasury address and forward it so the balance is at least 6. Then run once: `pnpm agent:demo -- --enable-execution`. The script refuses unless that flag is given, the balance is at least 6 and the balance after the payment stays at least 5, and it uses a single-use file `.secrets/m5-agent-demo.json` so it cannot run twice.
+Update (real agent payment done): the treasury held 17 RLUSD, so the gate passed. One run of `pnpm agent:demo -- --enable-execution --regular-key` (deterministic mode, no LLM, local native Postgres, guard signing with the treasury's regular key) paid the seeded 1 RLUSD invoice `INV-DEMO-001` of the approved cross-border supplier. The script refuses unless the flag is given, the balance is at least 6 and stays at least 5, and it uses the single-use file `.secrets/m5-agent-demo.json`, so it cannot run twice. An earlier attempt the same day stopped before any payment (the guard rate limit of 30 requests per minute rejected the first call of the paid run, nothing was submitted, treasury still 17); the script now waits 65 s between the blocked and the paid run.
+
+| Evidence | Result |
+|---|---|
+| Transaction | `237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D`, https://testnet.xrpl.org/transactions/237170E2F24845D2FB5FD920913971DFA53C567536C165501FA66C473EED352D |
+| Ledger (`tx` on https://s.altnet.rippletest.net:51234/) | validated, ledger 22311601, `tesSUCCESS`, `delivered_amount` 1 RLUSD (issuer `rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV`), fee 12 drops |
+| Signer | `SigningPubKey` equals the public key (ED25519, prefix `ED`) of the regular key `rBo9yA5iS9y8D1GNmz7eLnZqfYEHei5fpb` (derived from the gitignored seed file, nothing printed); `account_info` shows that RegularKey on the treasury |
+| Guard payment state | `validated` (the paid state), payment `7aaa2d75-e41d-49e1-bec9-54601300ba69` |
+| Run record | status `paid`, derived by the guard (`agent_runs` row for that payment); `docs/demo/agent-run-20261114T054829Z-paid.json` |
+| Audit chain | `verify_audit_chain` returned true |
+| Balances | treasury 17 -> 16 RLUSD (exactly 1, stays at least 5); supplier 2 -> 3 RLUSD |
+| Idempotency | same-key replay returned the original payment and hash (HTTP 200, `validated`); a request with a new key for the same invoice was `blocked`; one validated payment and one hash exist for the invoice; treasury stayed at 16. Run with `pnpm agent:demo -- --verify-paid` (guard with the kill switch OFF) |
+| Blocked scenario | over-cap invoice of 5 RLUSD (cap 2): `blocked`, `PAYMENT_LIMIT_EXCEEDED`, no hash, treasury unchanged; `docs/demo/agent-run-20261114T054705Z-blocked.json` |
+| Kill switch | the guard for the run was stopped afterwards; no guard is running |
+
+Transcript: `docs/demo/real-payment-transcript.md`.
 
 ## Spec v3.5 clarifications
 None were made. `Flow_AI_MVP_README_v3.5.md` and v3.0 are unchanged. Candidates for a later clarification: `get_payment_status` accepts `invoice_id`; `list_open_invoices` item shape; pending (202) handling; `AGENT_RUN_STALE_SECONDS`.
@@ -91,5 +106,5 @@ Other doc edits: `docs/secure-coding-standards.md` AG-2 now names the five spec 
 - Live LLM behaviour (the LLM path was tested only with a fake model, including a model that obeys prompt injection).
 - A single shared agent token (rotation supported by `AGENT_TO_PAYMENT_GUARD_TOKEN_NEXT`, no per-run scoping).
 - MCP SDK stdio behaviour on Windows beyond the tests that ran.
-- The paid agent run on Testnet (pending the faucet top-up above).
+- Live LLM mode for the paid run (the real payment used deterministic mode).
 - Web accessibility of the new page: automated jsdom checks only, no real-browser or formal WCAG audit.

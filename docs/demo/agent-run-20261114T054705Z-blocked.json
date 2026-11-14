@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "label": "RECORDED RUN (not live)",
+  "recorded_at": "2026-11-14T05:47:05.352Z",
+  "ledger": "testnet",
+  "network": "xrpl-testnet",
+  "mode": "deterministic",
+  "effective_mode": "deterministic",
+  "trigger": "manual",
+  "status": "blocked",
+  "summary": "Payment not submitted. The amount 5 exceeds the per-payment cap of 2. No funds were moved.",
+  "decision_code": "PAYMENT_LIMIT_EXCEEDED",
+  "agent_reason": "Deterministic probe: earliest due date (2026-12-14) among 1 ineligible invoices, amount 5 RLUSD. The payment guard decides.",
+  "tool_call_count": 4,
+  "payment": {
+    "id": "244c2ab1-7731-40ba-bfa3-cd619a7285e5",
+    "tx_hash": null,
+    "explorer_url": null
+  },
+  "events": [
+    {
+      "kind": "tool_call",
+      "tool_name": "get_business_snapshot",
+      "ok": true,
+      "duration_ms": 269,
+      "input": {},
+      "output": {
+        "rlusd_balance": "17",
+        "minimum_reserve": "4",
+        "daily_remaining": "3",
+        "automation": "enabled",
+        "stale": false
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "list_open_invoices",
+      "ok": true,
+      "duration_ms": 1286,
+      "input": {
+        "limit": 20
+      },
+      "output": {
+        "count": 1,
+        "invoices": [
+          {
+            "invoice_id": "b245c653-9308-49db-985b-d481a13f809e",
+            "due_date": "2026-12-14",
+            "amount": "5",
+            "eligible": false
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "get_invoice_details",
+      "ok": true,
+      "duration_ms": 1059,
+      "input": {
+        "invoice_id": "b245c653-9308-49db-985b-d481a13f809e"
+      },
+      "output": {
+        "invoice_id": "b245c653-9308-49db-985b-d481a13f809e",
+        "eligible": false,
+        "failed_checks": [
+          "PAYMENT_LIMIT_EXCEEDED",
+          "DAILY_LIMIT_EXCEEDED"
+        ]
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "input": {
+        "invoice_id": "b245c653-9308-49db-985b-d481a13f809e",
+        "idempotency_key": "agent-a863d0215440855f6da0670e562d940b56f67a0c",
+        "agent_reason": "Deterministic probe: earliest due date (2026-12-14) among 1 ineligible invoices, amount 5 RLUSD. The payment guard decides."
+      }
+    },
+    {
+      "kind": "tool_call",
+      "tool_name": "request_supplier_payment",
+      "ok": true,
+      "duration_ms": 1139,
+      "input": {
+        "invoice_id": "b245c653-9308-49db-985b-d481a13f809e",
+        "idempotency_key": "agent-a863d0215440855f6da0670e562d940b56f67a0c"
+      },
+      "output": {
+        "payment_id": "244c2ab1-7731-40ba-bfa3-cd619a7285e5",
+        "status": "blocked",
+        "decision_code": "PAYMENT_LIMIT_EXCEEDED",
+        "failure_code": "PAYMENT_LIMIT_EXCEEDED",
+        "amount": "5",
+        "tx_hash": null
+      }
+    }
+  ]
+}
