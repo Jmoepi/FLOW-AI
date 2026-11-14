@@ -87,8 +87,13 @@ export async function verifyAdminChecks(admin: pg.Client): Promise<VerifyResult[
 /** Checks run on a connection logged in as the app role itself: no DELETE/TRUNCATE grant and denied writes (rolled back). */
 export async function verifyRoleChecks(c: pg.Client, role: AppRole): Promise<VerifyResult[]> {
   const out: VerifyResult[] = [];
-  const priv = (await c.query<{ n: string }>("SELECT count(*) AS n FROM information_schema.role_table_grants WHERE grantee = current_user AND table_schema = 'public' AND privilege_type IN ('DELETE','TRUNCATE')")).rows[0]?.n;
-  out.push({ name: `${role} holds no DELETE/TRUNCATE grant`, ok: priv === "0", detail: `${String(priv)} grants` });
+  // The only allowed exception: flow_web may DELETE on login_attempts (migration 0010 pruning job, row-policy limited).
+  const grants = (await c.query<{ table_name: string; privilege_type: string }>("SELECT table_name, privilege_type FROM information_schema.role_table_grants WHERE grantee = current_user AND table_schema = 'public' AND privilege_type IN ('DELETE','TRUNCATE')")).rows;
+  const isAllowed = (g: { table_name: string; privilege_type: string }): boolean => role === "flow_web" && g.table_name === "login_attempts" && g.privilege_type === "DELETE";
+  const unexpected = grants.filter((g) => !isAllowed(g));
+  out.push({ name: `${role} holds no DELETE/TRUNCATE grant (except flow_web DELETE on login_attempts)`, ok: unexpected.length === 0, detail: `${String(unexpected.length)} unexpected grants` });
+  const exceptionCount = grants.filter(isAllowed).length;
+  out.push({ name: `${role} DELETE exception is limited to login_attempts and flow_web`, ok: role === "flow_web" ? exceptionCount === 1 : grants.length === 0, detail: `${String(exceptionCount)} exception grants` });
   await deniedWrite(c, role, "DELETE FROM payments", "DELETE FROM payments", out);
   await deniedWrite(c, role, "TRUNCATE audit_events", "TRUNCATE audit_events", out);
   await deniedWrite(c, role, "UPDATE audit_events", "UPDATE audit_events SET event_type = event_type", out);

@@ -2,16 +2,17 @@ import type { ReactNode } from "react";
 import { describeEvent, displayStatus, modeLabel, outcomeOf, outcomeText, shortHash, triggerLabel } from "./agent-format";
 import { StatusBadge } from "./Badge";
 import { formatInstant } from "./format";
+import { EmptyState } from "./States";
 import type { AgentRunsPage } from "./types";
 /** Read-only feed of agent runs. Every value is a React text child; the only link is the allowlisted testnet explorer URL. */
 export function AgentActivityView({ page, timezone }: { page: AgentRunsPage; timezone: string }): ReactNode {
   const older = page.next_before_seq !== null && Number.isSafeInteger(page.next_before_seq) && page.next_before_seq > 0 ? page.next_before_seq : null;
   return (
     <>
-      <h1>Agent activity</h1>
+      <h1 className="page-title">Agent activity</h1>
       <p className="lede">What the payment agent did and why. The payment service makes every decision. Newest first.</p>
       {page.runs.length === 0 ? (
-        <p>No agent runs yet.</p>
+        <EmptyState title="No agent runs yet." />
       ) : (
         <ol className="run-list">
           {page.runs.map((run) => {

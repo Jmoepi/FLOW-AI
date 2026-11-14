@@ -1,6 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { writeJson } from "./api";
+import { Icon } from "./ui/Icon";
 export function LogoutButton(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -18,6 +19,7 @@ export function LogoutButton(): ReactNode {
   return (
     <>
       <button type="button" className="btn btn-secondary" onClick={onClick} disabled={busy}>
+        <Icon name="lock" />
         Sign out
       </button>
       {failed ? <span role="alert">Could not sign out. Try again.</span> : null}

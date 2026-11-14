@@ -4,6 +4,7 @@ import { StatusBadge } from "./Badge";
 import { str, writeJson } from "./api";
 import { explainDecision } from "./decision-codes";
 import { payloadFromSaved } from "./policy-logic";
+import { Icon } from "./ui/Icon";
 import type { OverviewData, PolicyData } from "./types";
 /**
  * How the owner stops it (spec 11.4). Pause is a fail-safe write (it never loosens a rule, so no re-login is needed);
@@ -43,12 +44,14 @@ export function ControlPanel({ policy, lastDecisionCode }: { policy: PolicyData;
       {saved.enabled ? (
         <p>
           <button type="button" className="btn btn-danger" onClick={pause} disabled={busy}>
+            <Icon name="alert" />
             Pause automation
           </button>
         </p>
       ) : (
         <p>
           <a className="btn" href="/policy">
+            <Icon name="arrow-right" />
             Review and turn automation back on
           </a>
         </p>
@@ -93,6 +96,7 @@ export function RunAgentButton({ initial }: { initial: OverviewData["agent"]["ru
     <>
       <p>
         <button type="button" className="btn" onClick={run} disabled={busy}>
+          <Icon name="activity" />
           Run treasury agent
         </button>
       </p>

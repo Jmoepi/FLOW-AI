@@ -18,6 +18,7 @@ export function PaymentStatus({ status }: { status: string }): ReactNode {
 /** Invoice rows. The reason for a block is stated in words next to the status. All cells are text. */
 export function InvoiceTable({ invoices, today, caption }: { invoices: InvoiceData[]; today: string; caption: string }): ReactNode {
   return (
+    <div className="table-wrap" role="region" aria-label={caption} tabIndex={0}>
     <table className="table">
       <caption>{caption}</caption>
       <thead>
@@ -57,11 +58,13 @@ export function InvoiceTable({ invoices, today, caption }: { invoices: InvoiceDa
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 /** Payment rows with a short hash and a copy button. The hash is never a link here: only the detail page links out. */
 export function PaymentTable({ payments, timezone, caption }: { payments: PaymentData[]; timezone: string; caption: string }): ReactNode {
   return (
+    <div className="table-wrap" role="region" aria-label={caption} tabIndex={0}>
     <table className="table">
       <caption>{caption}</caption>
       <thead>
@@ -104,5 +107,6 @@ export function PaymentTable({ payments, timezone, caption }: { payments: Paymen
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

@@ -40,8 +40,8 @@ export function LoginForm({ reauth = false }: { reauth?: boolean }): ReactNode {
     });
   };
   return (
-    <form onSubmit={submit} noValidate aria-labelledby="login-title">
-      <h1 id="login-title">Sign in</h1>
+    <form onSubmit={submit} noValidate aria-labelledby="login-title" className="glass-card login-card">
+      <h1 id="login-title" className="page-title">Sign in</h1>
       {reauth ? <p className="lede">Sign in again to change payment rules. This keeps a stolen session from loosening your limits.</p> : null}
       {hasProblem ? (
         <div className="error-summary" role="alert" tabIndex={-1} ref={summary}>

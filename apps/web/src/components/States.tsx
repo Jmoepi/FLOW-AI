@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { explainDecision } from "./decision-codes";
+import { Icon } from "./ui/Icon";
 /** Shared page states (spec 11.10): loading, empty, error and blocked. All text is fixed or caller-supplied plain text. */
 export function LoadingSkeleton({ label }: { label: string }): ReactNode {
   return (
@@ -13,7 +14,8 @@ export function LoadingSkeleton({ label }: { label: string }): ReactNode {
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }): ReactNode {
   return (
     <div className="empty-state">
-      <p>
+      <p className="state-title">
+        <Icon name="file-text" className="size-5" />
         <strong>{title}</strong>
       </p>
       {children === undefined ? null : <p>{children}</p>}
@@ -24,7 +26,10 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
 export function ErrorState({ title, children, retryHref }: { title: string; children?: ReactNode; retryHref?: string }): ReactNode {
   return (
     <div className="error-summary" role="alert">
-      <h2>{title}</h2>
+      <h2 className="state-title">
+        <Icon name="alert" className="size-5" />
+        {title}
+      </h2>
       {children === undefined ? null : <p>{children}</p>}
       {retryHref === undefined ? null : (
         <p>
@@ -39,7 +44,10 @@ export function BlockedNotice({ code }: { code: string | null }): ReactNode {
   const e = explainDecision(code);
   return (
     <section className="guard-note" aria-labelledby="blocked-title">
-      <h2 id="blocked-title">{e.title}</h2>
+      <h2 id="blocked-title" className="state-title">
+        <Icon name="shield-x" className="size-5" />
+        {e.title}
+      </h2>
       <p>{e.plain}</p>
       <p>{e.whatToDo}</p>
       <p>

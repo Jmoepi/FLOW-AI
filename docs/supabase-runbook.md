@@ -1,6 +1,6 @@
 # Supabase runbook
 
-Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0011 applied there; 0009 to 0011 were applied with `pnpm db:migrate --allow-remote` after the first run. `pnpm db:supabase:verify` reports 4 failed checks after 0009 to 0011 (see "Open verify findings")). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
+Verified procedure for the owner's hosted Supabase project (migrations 0001 to 0012 applied there (0009 to 0012 with `pnpm db:migrate --allow-remote`); `pnpm db:supabase:verify` passes). The sections after "Verified procedure" are the general reference. No secret appears in this file; real values live only in the gitignored `.env` and `.secrets/`.
 
 ## Verified procedure (run against the real project, session pooler)
 
@@ -27,11 +27,10 @@ Findings from the real run:
 - Smoke test (kill switch OFF): guard `/readyz` returned db ok, ledger ok, audit_chain ok. Web login through the real flow (Origin check, then a session cookie and CSRF token) returned 200; a wrong password 401; a foreign Origin 403; policy, overview and suppliers 200 (3 suppliers); logout without the CSRF token 403, with it 200, and the policy is 401 afterwards. `pnpm agent:run` ended with no payment, and `-- --probe-ineligible` ended `blocked` with `EXECUTION_DISABLED`. Nothing was sent to the ledger.
 
 
-## Open verify findings (after 0009 to 0011 were applied)
-`pnpm db:supabase:verify` passes the RLS check (18 of 18 tables), role attributes and the anon/authenticated table checks, and fails 4 checks:
-- `anon`, `authenticated` and PUBLIC can EXECUTE one public function. It is the trigger function `treasury_wallet_signing_key_transition()` added by 0011, which has PostgreSQL's default PUBLIC EXECUTE. A trigger function is not callable as a plain function, so the exposure is low, but the check is strict. Fix: a later migration with `REVOKE ALL ON FUNCTION treasury_wallet_signing_key_transition() FROM PUBLIC`.
-- `flow_web` holds one DELETE grant. It is the intended `DELETE ON login_attempts` of 0010 (limited by a row policy to windows older than one day). The check needs an allowance for that table.
-Neither fix has been applied to the Supabase project; both need the owner's decision.
+## Verify findings after 0009 to 0011 (resolved)
+The first verify run after 0009 to 0011 failed 4 checks. Both causes are fixed and `pnpm db:supabase:verify` now reports ALL CHECKS PASSED:
+- Trigger function `treasury_wallet_signing_key_transition()` (0011) had PostgreSQL's default PUBLIC EXECUTE. Migration `0012_revoke_trigger_function_execute.sql` revokes it from PUBLIC, `anon`, `authenticated`, `flow_guard` and `flow_web`. A trigger function needs EXECUTE only at CREATE TRIGGER time, so the trigger still fires (db tests pass).
+- `flow_web` holds `DELETE ON login_attempts` by design (0010 pruning job, row policy limits it to windows older than one day). The verifier now allows exactly that one grant for `flow_web` and has an explicit check that the exception is limited to that table and role. Every other DELETE/TRUNCATE grant still fails the check.
 
 ## 1. Create the project
 

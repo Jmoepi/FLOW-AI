@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type R
 import { StatusBadge } from "./Badge";
 import { getJson, str, writeJson } from "./api";
 import { formatInstant } from "./format";
+import { Icon } from "./ui/Icon";
 import { draftFrom, payloadFromSaved, riskyChanges, validate, type Draft, type FieldErrors, type FieldKey, type PolicyPayload } from "./policy-logic";
 import type { PolicyData, PolicyResponse, RlusdPair } from "./types";
 interface Props {
@@ -185,6 +186,7 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
         {saved.enabled ? (
           <p>
             <button type="button" className="btn btn-danger" onClick={onPause} disabled={busy}>
+              <Icon name="alert" />
               Pause automation
             </button>{" "}
             <span className="hint">Stops all automated payments immediately.</span>
@@ -193,7 +195,10 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
         <form onSubmit={onSubmit} noValidate aria-label="Payment policy">
           {hasSummary ? (
             <div className="error-summary" role="alert" tabIndex={-1} ref={summaryRef}>
-              <h2>There is a problem</h2>
+              <h2>
+                <Icon name="alert" className="mr-2 inline size-5 align-text-bottom" />
+                There is a problem
+              </h2>
               <ul>
                 {items.map((item) => (
                   <li key={item.text}>{item.href === undefined ? item.text : <a href={item.href}>{item.text}</a>}</li>
@@ -274,6 +279,7 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
         <div className="dialog-backdrop">
           <div ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby="review-title" onKeyDown={trapTab}>
             <h2 id="review-title" tabIndex={-1} ref={dialogTitleRef}>
+              <Icon name="shield" className="mr-2 inline size-5 align-text-bottom" />
               Review before saving
             </h2>
             <p>This change loosens a protection. The payment service will apply it to the next payment request:</p>
@@ -292,6 +298,7 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
                   send(next, true);
                 }}
               >
+                <Icon name="check" />
                 Confirm and save
               </button>
               <button type="button" className="btn btn-secondary" onClick={closeReview}>

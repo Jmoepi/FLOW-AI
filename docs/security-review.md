@@ -164,3 +164,11 @@ Residual risks: a regular key can sign any valid payment while it is active, so 
 - Open Low: `login_attempts` rows are never pruned. Add a pruning job before deployment.
 - Open Low: a trusted-proxy setting is needed before deployment, otherwise all clients share one IP rate-limit bucket.
 - Open Low: a manual real-browser accessibility and CSP pass is needed before the demo. Current checks are automated jsdom tests only.
+## UI redesign (apps/web)
+- No new origins. All fonts, icons, the starfield and the globe are local files or inline SVG. Tailwind, Iconify, D3, Google Fonts and the remote GeoJSON from the design template were not used. `test/no-external-origins.test.ts` scans the built `.next` output and the CSP for any host outside a short, justified allow-list (skipped, not faked, when no build exists).
+- CSP unchanged. `security-headers.ts` and `proxy.ts` were not edited, and `security-headers.test.ts` passes without changes. `style-src` keeps the nonce and prod has no `unsafe-inline`. `test/csp-static.test.ts` still forbids `style` props, `<script>`, inline handlers and `dangerouslySetInnerHTML` in components.
+- New devDependencies of `apps/web`: `tailwindcss` and `@tailwindcss/postcss`, both exact-pinned at 4.3.5. Neither has an install script. `@tailwindcss/oxide` has only build-time napi scripts and its binary arrives as a prebuilt optional dependency. `.npmrc` keeps `ignore-scripts=true` and `allowBuilds` in `pnpm-workspace.yaml` is unchanged. Both are build-time only and ship no runtime code. The lockfile stays consistent under `pnpm install --frozen-lockfile`.
+- Fonts: Manrope and Inter variable woff2 files are committed under `apps/web/src/fonts/` with their OFL-1.1 licences, taken from the `@fontsource-variable` packages (not installed as dependencies). They are served from the app's own origin.
+- No third-party runtime code was added. The only client component added is the nav menu disclosure.
+- Logged-out `/` now renders a public landing page. Any request with a session still passes through the unchanged `requireOwner()` gate. The landing page has no data fetching and no forms.
+- Residual: no real-browser check was possible. The manual accessibility and CSP pass listed above (open Low) is still needed, and `docs/ui-design.md` lists the visual checks.
