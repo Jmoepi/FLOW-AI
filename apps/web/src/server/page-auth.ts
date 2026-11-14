@@ -12,6 +12,13 @@ export interface OwnerPage {
   /** Runs one of the registered GET routes with the caller's own cookie, so pages and API share one authorization path. */
   load: <T>(route: Route, pathAndQuery: string) => Promise<T>;
 }
+/** True when the request carries no valid session at all. Used only by `/` to decide between the public landing page and the owner overview. */
+export async function isLoggedOut(): Promise<boolean> {
+  const deps = await getDeps();
+  const cookie = (await headers()).get("cookie");
+  const req = new Request(`${deps.config.appOrigin}/api/session`, { method: "GET", headers: cookie === null ? {} : { cookie } });
+  return (await getSessionContext(deps, req)) === null;
+}
 /**
  * Server-side gate for every owner page (AZ-1). No valid owner session means a redirect to /login; there is no
  * client-side-only check. Data is read through the same route handlers the API exposes.
