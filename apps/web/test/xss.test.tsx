@@ -65,7 +65,9 @@ describe("hostile text is rendered as text, never as markup", () => {
   });
   it("source has no dangerouslySetInnerHTML (also enforced by eslint)", () => {
     const dir = join(process.cwd(), "src", "components");
-    for (const f of fs.readdirSync(dir)) expect(fs.readFileSync(join(dir, f), "utf8")).not.toContain("dangerouslySetInnerHTML");
+    for (const f of fs.readdirSync(dir, { recursive: true, encoding: "utf8" })) {
+      if (/\.tsx?$/.test(f)) expect(fs.readFileSync(join(dir, f), "utf8")).not.toContain("dangerouslySetInnerHTML");
+    }
   });
 });
 describe("agent activity renders agent text as text only", () => {

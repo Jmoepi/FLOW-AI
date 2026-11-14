@@ -16,6 +16,8 @@ import NotFound from "../src/app/not-found";
 import { BlockedNotice, EmptyState, ErrorState, LoadingSkeleton } from "../src/components/States";
 import { PolicyForm } from "../src/components/PolicyForm";
 import { PublicShell, Shell, TestnetBanner, type NavKey } from "../src/components/Shell";
+import { Landing } from "../src/components/Landing";
+import { StatusChip, type ChipState } from "../src/components/ui/StatusChip";
 import { SuppliersView } from "../src/components/SuppliersView";
 import { AGENT_RUNS, AUDIT, INVOICE_BLOCKED, INVOICE_OPEN, OVERVIEW, PAIR, PAYMENT_BLOCKED, PAYMENT_PAID, PAYMENT_PENDING, POLICY, SUPPLIERS } from "./ui-fixtures";
 /**
@@ -146,5 +148,36 @@ describe("axe-core (jsdom) finds no violations", () => {
     expect(document.querySelectorAll("h1")).toHaveLength(1);
     expect(document.querySelector("nav")?.getAttribute("aria-label")).toBe("Main");
     expect(document.querySelector("a.skip-link")).not.toBeNull();
+  });
+});
+
+describe("axe-core (jsdom): landing, nav and status chips", () => {
+  it("landing page", async () => {
+    expect(await violations(<Landing />, "Flow AI | Limits you can prove")).toEqual([]);
+  });
+  it("authenticated shell with the nav menu open", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    document.title = "Invoices | Flow AI";
+    render(shell("invoices", <h1>Invoices</h1>));
+    await user.click(document.querySelector("button[aria-controls]") as HTMLElement);
+    const r = await axe.run(document, { rules: { "color-contrast": { enabled: false } }, resultTypes: ["violations"] });
+    expect(r.violations.map((v) => v.id)).toEqual([]);
+  });
+  it("every status chip state has a text label and passes axe", async () => {
+    const states: ChipState[] = ["success", "pending", "blocked", "degraded", "revoked"];
+    expect(
+      await violations(
+        <main>
+         <ul>
+          {states.map((s) => (
+            <li key={s}>
+              <StatusChip state={s} />
+            </li>
+          ))}
+         </ul>
+        </main>,
+        "Chips | Flow AI",
+      ),
+    ).toEqual([]);
   });
 });

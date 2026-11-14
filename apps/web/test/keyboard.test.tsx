@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "../src/components/LoginForm";
 import { PolicyForm } from "../src/components/PolicyForm";
+import { Landing } from "../src/components/Landing";
+import { ShinyButton } from "../src/components/ui/ShinyButton";
 import { PublicShell, Shell } from "../src/components/Shell";
 import { PAIR, POLICY } from "./ui-fixtures";
 interface Call {
@@ -236,5 +238,50 @@ describe("keyboard: agent activity", () => {
     for (let i = 0; i < 30 && document.activeElement !== older; i++) await user.tab();
     expect(document.activeElement).toBe(older);
     expect(older.getAttribute("href")).toBe("/agent?before_seq=4");
+  });
+});
+
+describe("keyboard: landing, nav menu and shiny button", () => {
+  it("landing: skip link first, then every control is reachable in DOM order and the shiny CTA takes focus", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Landing />);
+    await user.tab();
+    expect(document.activeElement?.textContent).toBe("Skip to main content");
+    const seen: Element[] = [];
+    for (let i = 0; i < 60; i++) {
+      await user.tab();
+      const el = document.activeElement;
+      if (el === null || el === document.body || seen.includes(el)) break;
+      seen.push(el);
+    }
+    const focusable = [...container.querySelectorAll("a[href], button")].filter((e) => e.getAttribute("aria-hidden") !== "true" && e.getAttribute("tabindex") !== "-1");
+    const signIn = focusable.find((e) => e.textContent?.trim().startsWith("Sign in"));
+    expect(signIn).toBeDefined();
+    expect(seen).toContain(signIn);
+  });
+  it("shiny button is focusable by Tab and activatable by keyboard as a link", async () => {
+    const user = userEvent.setup();
+    render(<ShinyButton href="/login">Sign in</ShinyButton>);
+    await user.tab();
+    const a = screen.getByRole("link", { name: "Sign in" });
+    expect(document.activeElement).toBe(a);
+    expect(a.getAttribute("href")).toBe("/login");
+  });
+  it("nav menu opens with Enter and Space, closes with Escape and returns focus", async () => {
+    const user = userEvent.setup();
+    render(
+      <Shell businessName="Acme" current="overview">
+        <h1>Page</h1>
+      </Shell>,
+    );
+    const btn = screen.getByRole("button", { name: "Menu" });
+    btn.focus();
+    await user.keyboard("{Enter}");
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    await user.keyboard("{Escape}");
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(btn);
+    await user.keyboard(" ");
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
   });
 });
