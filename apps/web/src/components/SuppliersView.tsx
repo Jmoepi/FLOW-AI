@@ -41,8 +41,9 @@ export function SuppliersView({ initial }: { initial: SupplierData[] }): ReactNo
       <p className="lede">The agent can only request payment to suppliers you have approved. Names and addresses are read-only here.</p>
       <p className="guard-note">Approving allows the agent to request payment to this address within your other limits. Removing approval takes effect on the next payment request.</p>
       {suppliers.length === 0 ? (
-        <p>No suppliers yet.</p>
+        <p className="empty-state">No suppliers yet.</p>
       ) : (
+        <div className="table-wrap" role="region" aria-label="Suppliers and their approval status" tabIndex={0}>
         <table className="table">
           <caption className="sr-only">Suppliers and their approval status</caption>
           <thead>
@@ -64,7 +65,7 @@ export function SuppliersView({ initial }: { initial: SupplierData[] }): ReactNo
                   <span className="address" title={s.xrpl_address}>
                     {shortAddress(s.xrpl_address)}
                   </span>{" "}
-                  <button type="button" className="btn btn-secondary" onClick={() => copy(s)} aria-label={`Copy full XRPL address for ${s.name}`}>
+                  <button type="button" className="btn btn-secondary btn-small" onClick={() => copy(s)} aria-label={`Copy full XRPL address for ${s.name}`}>
                     Copy
                   </button>
                 </td>
@@ -96,6 +97,7 @@ export function SuppliersView({ initial }: { initial: SupplierData[] }): ReactNo
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <p role="status" aria-live="polite" className="status">
         {status}

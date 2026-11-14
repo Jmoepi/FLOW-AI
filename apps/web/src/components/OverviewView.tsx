@@ -19,7 +19,7 @@ const SIGNING_KEY: Record<OverviewData["signing_key"]["state"], { tone: Tone; ic
   active: { tone: "ok", icon: "check", label: "Regular key active", text: "The guard signs with a revocable key. Your treasury's master key stays with you and is not on this server." },
   not_set: { tone: "neutral", icon: "dot", label: "No regular key registered", text: "The guard is not using a revocable key. Register one with the owner script on your own computer." },
   other: { tone: "warn", icon: "warn", label: "Different regular key on the ledger", text: "A regular key is registered that this guard does not use. Check it with the owner script." },
-  revoked: { tone: "bad", icon: "ban", label: "Signing key revoked", text: "The ledger refused the guard's signing key. Payments are blocked and nothing was moved. Register a new key with the owner script to resume." },
+  revoked: { tone: "bad", icon: "warn", label: "Signing key revoked", text: "The ledger refused the guard's signing key. Payments are blocked and nothing was moved. Register a new key with the owner script to resume." },
   unknown: { tone: "neutral", icon: "dot", label: "Not reported yet", text: "The guard has not reported its signing key state yet." },
 };
 const AGENT: Record<OverviewData["agent"]["state"], { tone: Tone; icon: IconKey; label: string }> = {
