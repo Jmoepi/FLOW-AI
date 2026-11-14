@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { TestnetBanner } from "../components/Shell";
+import { inter, manrope } from "./fonts";
 import "./globals.css";
 // Every page is rendered per request: the CSP nonce is per request, and the content is per user (no static caching).
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 export default function RootLayout({ children }: { children: ReactNode }): ReactNode {
   return (
-    <html lang="en">
+    <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
       <body>
         <TestnetBanner />
         {children}
