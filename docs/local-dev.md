@@ -25,6 +25,12 @@ pnpm guard:dev
 # 3. Web app on http://127.0.0.1:3000
 pnpm dev:web
 ```
+## Owner login and password reset
+The local owner password is the `DEMO_OWNER_PASSWORD` line in `.secrets/web-owner.env`. It only works against the local database. The Supabase owner is a separate account with its own password in `.secrets/web-owner.supabase.env` (used with `pnpm dev:web -- --supabase`); the two files do not match each other. `pnpm db:seed:demo` never changes an existing owner's password, so if the file was regenerated or the database re-created, the file can be stale. Fix it with:
+```bash
+pnpm db:reset-owner-password -- --local        # new random password -> .secrets/web-owner.env (path printed, password never printed)
+```
+This also clears the owner's account lock, sessions and login-attempt counters. The Supabase variant (`-- --supabase --allow-remote`) writes `.secrets/web-owner.supabase.env` and is refused without `--allow-remote`. Use http://127.0.0.1:3000 (not `localhost`): the login checks the Origin header.
 Open http://127.0.0.1:3000/login. Email: `owner@demo.flow-ai.test` (or the value in `.secrets/web-owner.env`). Password: the `DEMO_OWNER_PASSWORD` line in `.secrets/web-owner.env`.
 
 Run the agent (guard must be running; deterministic mode needs no key): `pnpm agent:run` (add `-- --record` to write a transcript to `docs/demo/`, `-- --probe-ineligible` to see the guard block an invoice). Then open http://127.0.0.1:3000/agent. See [m5-notes.md](m5-notes.md).

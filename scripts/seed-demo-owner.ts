@@ -30,6 +30,7 @@ import {
 } from "../packages/database/src/index";
 import { hashPassword, isAcceptablePassword } from "../apps/web/src/server/auth/password";
 import { SECRETS_DIR, loadConfig, readPublicWallets, toErrorMessage } from "./lib/common";
+import { parseEnvFile } from "./lib/owner-password";
 import { loadSupabaseTarget } from "./lib/supabase";
 
 const SUPABASE_MODE = process.argv.includes("--supabase");
@@ -69,13 +70,7 @@ function parseArgs(argv: readonly string[]): Args {
 
 /** Reads KEY=value lines from the owner file. Values are returned to the caller only; never printed. */
 function readOwnerFile(): Map<string, string> {
-  const out = new Map<string, string>();
-  if (!existsSync(OWNER_FILE)) return out;
-  for (const line of readFileSync(OWNER_FILE, "utf8").split(/\r?\n/)) {
-    const m = /^([A-Z_]+)=(.*)$/.exec(line);
-    if (m?.[1] !== undefined && m[2] !== undefined) out.set(m[1], m[2]);
-  }
-  return out;
+  return existsSync(OWNER_FILE) ? parseEnvFile(readFileSync(OWNER_FILE, "utf8")) : new Map<string, string>();
 }
 
 function writeOwnerFile(email: string, password: string): void {
@@ -185,7 +180,13 @@ async function main(): Promise<void> {
     console.log(`  business: ${businessCreated ? "created" : "exists"}; owner login: ${credentialCreated ? "created" : "exists"}; membership: ${memberCreated ? "created" : "exists"}; password: ${passwordChanged ? "set" : "unchanged"}`);
     if (generated) console.log(`A random owner password was written to ${OWNER_FILE} (gitignored, not printed). Email: ${resolveOwner(false).email}`);
     else if (credentialCreated || passwordChanged) console.log("Owner password taken from DEMO_OWNER_PASSWORD (not printed).");
-    else console.log(`Sign in with the owner email and the password from DEMO_OWNER_PASSWORD or ${OWNER_FILE}.`);
+    else {
+      console.log(`Sign in with the owner email and the password from DEMO_OWNER_PASSWORD or ${OWNER_FILE}.`);
+      if (!credentialCreated) {
+        const flag = supabase ? "--supabase --allow-remote" : "--local";
+        console.log(`The owner already exists, so its stored password was NOT changed and ${OWNER_FILE} may be stale (for example if the file was regenerated or the database was re-created). If login fails, run: pnpm db:reset-owner-password -- ${flag}`);
+      }
+    }
   } finally {
     await pool.end();
   }
