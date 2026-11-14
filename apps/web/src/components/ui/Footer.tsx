@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export function Footer(): ReactNode {
   return (
     <footer className="relative mt-16 overflow-hidden border-t border-white/10">
-      <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-12 sm:grid-cols-3 sm:px-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-6 sm:grid-cols-3 sm:px-6">
         <div>
           <p className="font-display text-lg font-bold text-white">Flow AI</p>
           <p className="mt-2 max-w-xs text-sm text-zinc-400">Testnet only, hackathon MVP. Not production software and not financial advice.</p>

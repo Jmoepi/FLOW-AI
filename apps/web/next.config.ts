@@ -3,6 +3,8 @@ const config: NextConfig = {
   // No framework fingerprint in responses (WB-6).
   poweredByHeader: false,
   reactStrictMode: true,
+  // Hide the dev-only Next indicator (it renders unstyled under the strict CSP).
+  devIndicators: false,
   // pg is a CommonJS driver with optional native bindings: keep it out of the bundle.
   serverExternalPackages: ["pg"],
   // Workspace packages ship TypeScript source.

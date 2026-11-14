@@ -18,7 +18,7 @@ export function LogoutButton(): ReactNode {
   };
   return (
     <>
-      <button type="button" className="btn btn-secondary" onClick={onClick} disabled={busy}>
+      <button type="button" className="btn btn-secondary btn-small whitespace-nowrap" onClick={onClick} disabled={busy}>
         <Icon name="lock" />
         Sign out
       </button>

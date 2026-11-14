@@ -59,7 +59,7 @@ export function ControlPanel({ policy, lastDecisionCode }: { policy: PolicyData;
       <p role="status" aria-live="polite" className="status">
         {status}
       </p>
-      <h3>Emergency stop</h3>
+      <h3 className="mt-4 mb-1 text-base font-semibold text-white">Emergency stop</h3>
       <p>
         The emergency stop is a server setting that only your operator can change. It blocks every payment, whatever your rules say. This page cannot read its live value.
       </p>

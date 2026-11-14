@@ -9,6 +9,8 @@
   --color-noir: #000000;
   --color-accent: #ef233c;
   --color-accent-dark: #d90429;
+  --color-accent-2: #a78bfa;
+  --color-accent-3: #38bdf8;
   --color-glass: rgb(255 255 255 / 5%);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-display: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -55,6 +57,10 @@
   --focus: #ffffff;
   --accent: #ef233c;
   --accent-dark: #d90429;
+  --accent-2: #a78bfa;
+  --accent-3: #38bdf8;
+  --heading: #ffffff;
+  --label: #d4d4d8;
   --accent-ink: #000000;
   --glow-bottom: #1a0505;
   --btn-bg: #d90429;
@@ -107,13 +113,27 @@ body {
     font-family: var(--font-display);
   }
   h1 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--heading);
     line-height: 1.25;
     margin: 0 0 1rem;
   }
   h2 {
-    font-size: 1.15rem;
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--heading);
     margin: 1.5rem 0 0.5rem;
+  }
+  main > h2,
+  .panel > h2 {
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--accent);
+    line-height: 1.3;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--accent);
   }
 }
 :focus-visible {
@@ -191,9 +211,9 @@ main:focus {
 }
 @layer base {
   main {
-    max-width: 64rem;
+    max-width: 72rem;
     margin: 0 auto;
-    padding: 1.5rem 1rem 3rem;
+    padding: 1.5rem 0.75rem 3rem;
   }
 }
 .narrow {
@@ -213,6 +233,28 @@ main:focus {
   font-size: 0.875rem;
   font-weight: 600;
   min-height: 1.5rem;
+  line-height: 1.25;
+  vertical-align: middle;
+  flex: none;
+}
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+.form-actions {
+  border-top: 1px solid var(--rule);
+  padding-top: 1rem;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 .badge svg {
   width: 1em;
@@ -292,7 +334,7 @@ main:focus {
 }
 .hint {
   display: block;
-  color: var(--muted);
+  color: var(--label);
   font-size: 0.9375rem;
   margin-bottom: 0.25rem;
 }
@@ -325,6 +367,7 @@ main:focus {
   min-height: var(--target);
 }
 .check input {
+  accent-color: var(--accent);
   width: 1.5rem;
   height: 1.5rem;
   flex: none;
@@ -333,12 +376,14 @@ fieldset {
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 1rem;
   background: rgb(0 0 0 / 60%);
-  margin: 0 0 1.25rem;
-  padding: 0.75rem 1rem;
+  margin: 0.75rem 0 1.25rem;
+  padding: 1rem 1.25rem 1.25rem;
 }
 legend {
-  font-weight: 600;
-  padding: 0 0.25rem;
+  font-weight: 700;
+  color: var(--heading);
+  padding: 0 0.5rem;
+  margin-left: -0.25rem;
 }
 .error-summary {
   border: 3px solid var(--bad-text);
@@ -368,6 +413,12 @@ legend {
   padding: 1.25rem;
   margin: 0 0 1.5rem;
 }
+.panel > :last-child {
+  margin-bottom: 0;
+}
+.panel p {
+  margin: 0.5rem 0;
+}
 .guard-note {
   border: 1px solid rgb(255 255 255 / 8%);
   border-left: 4px solid var(--accent);
@@ -392,11 +443,18 @@ legend {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid rgb(255 255 255 / 8%);
+  border-top: 3px solid var(--accent);
   border-radius: var(--radius-card);
   padding: 1rem 1.25rem;
 }
+.facts > div:nth-child(4n + 2) {
+  border-top-color: var(--accent-2);
+}
+.facts > div:nth-child(4n + 3) {
+  border-top-color: var(--accent-3);
+}
 .facts dt {
-  color: var(--muted);
+  color: var(--label);
   font-size: 0.9375rem;
 }
 .facts dd {
@@ -409,8 +467,21 @@ legend {
 .facts dd small {
   display: block;
   font-size: 0.875rem;
+  font-family: var(--font-sans);
   font-weight: 400;
   color: var(--muted);
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
+.facts dd small .badge {
+  display: flex;
+  width: fit-content;
+  margin-top: 0.25rem;
+}
+.hint code {
+  font-size: 0.8125rem;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .dialog-backdrop {
   position: fixed;
@@ -446,8 +517,11 @@ legend {
   padding: 0.25rem 0.75rem;
   margin: 0 0 1rem;
 }
+.table thead tr {
+  background: rgb(167 139 250 / 8%);
+}
 .table th {
-  color: var(--muted);
+  color: var(--accent-2);
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -489,17 +563,37 @@ legend {
     grid-template-columns: 1fr 1fr;
   }
   main {
-    padding: 2rem 1.5rem 4rem;
+    padding: 2rem 0.75rem 4rem;
   }
 }
 /* Tables become stacked rows on narrow screens so nothing needs horizontal scrolling at 320 CSS px. */
 @media (max-width: 39.99em) {
+  .table-wrap {
+    position: relative;
+  }
   .table thead {
     position: absolute;
     width: 1px;
     height: 1px;
+    margin: -1px;
+    padding: 0;
     overflow: hidden;
     clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .table thead tr,
+  .table thead th {
+    display: block;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .table caption {
+    display: block;
+    width: 100%;
+    caption-side: top;
   }
   .table,
   .table tbody,
@@ -514,13 +608,20 @@ legend {
   }
   .table td {
     border: 0;
-    padding: 0.25rem 0;
+    padding: 0.2rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    text-align: right;
   }
   .table td::before {
     content: attr(data-label);
-    display: block;
-    color: var(--muted);
-    font-size: 0.875rem;
+    flex: none;
+    color: var(--label);
+    font-size: 0.8125rem;
+    text-align: left;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -573,13 +674,18 @@ legend {
   background: var(--net-bg);
   color: var(--net-text);
   border-bottom: 1px solid var(--rule);
-  padding: 0.35rem 1rem;
-  font-size: 0.9375rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
   align-items: center;
+  text-align: center;
+}
+.testnet-banner > span {
+  min-width: 0;
 }
 .btn-small {
   padding: 0.25rem 0.75rem;
@@ -592,7 +698,7 @@ legend {
   word-break: break-all;
 }
 .empty-state {
-  border: 2px dashed var(--border);
+  border: 2px dashed var(--accent-2);
   border-radius: var(--radius-card);
   padding: 1rem;
   margin: 1rem 0;
@@ -644,7 +750,7 @@ legend {
 }
 .table caption {
   text-align: left;
-  color: var(--muted);
+  color: var(--label);
   padding: 0.25rem 0;
 }
 .table a {
@@ -677,7 +783,7 @@ legend {
   margin: 0 0 1.5rem;
 }
 .detail-list dt {
-  color: var(--muted);
+  color: var(--label);
   font-size: 0.9375rem;
 }
 .detail-list dd {
@@ -778,7 +884,7 @@ html {
 }
 .watermark {
   color: transparent;
-  -webkit-text-stroke: 1px rgb(255 255 255 / 12%);
+  -webkit-text-stroke: 1px rgb(255 255 255 / 22%);
 }
 .star-drift-slow,
 .star-drift-mid,
@@ -913,7 +1019,7 @@ html {
   gap: 0.5rem;
 }
 .empty-state {
-  background: rgb(0 0 0 / 60%);
+  background: rgb(167 139 250 / 6%);
 }
 .skeleton-block {
   background: rgb(0 0 0 / 60%);
@@ -925,4 +1031,20 @@ html {
 .login-card:focus-within,
 .state-card:hover {
   transform: none;
+}
+@media (min-width: 64em) {
+  .facts {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+/* An empty live region keeps its node for screen readers but takes no space. */
+.status:empty {
+  min-height: 0;
+  margin: 0;
+}
+.table td {
+  vertical-align: middle;
+}
+.lede + .status-line {
+  margin-top: 0.75rem;
 }

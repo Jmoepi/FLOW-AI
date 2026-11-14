@@ -4,7 +4,7 @@ This document describes the redesigned `apps/web` interface: tokens, components,
 
 ## Honest limits of this work
 
-- No browser was available while this was built. Nothing here was looked at on a screen. Layout, spacing, animation and colour inside glass cards are unverified visually.
+- The UI polish pass was checked in headless Microsoft Edge: full-page screenshots of every page (landing, login, overview, invoices, invoice detail, payments, suppliers, policy, agent, audit, not found) at 320, 375, 768 and 1280 px, with a script check for horizontal scroll and elements past the right edge. This is still not a manual keyboard, zoom or forced-colours pass, and payment detail was not captured (no seeded payments).
 - What is verified: jsdom tests (jest-axe, keyboard, XSS, CSP static checks), computed WCAG contrast ratios from the token values, a grep of the built output for external origins, and `curl` against the production build.
 - Automated checks do not replace a real-browser pass. The checklist is at the end of this file.
 - Accessibility goal is WCAG 2.2 AA. Compliance is not claimed.
@@ -24,6 +24,10 @@ Defined in `apps/web/src/app/globals.css`: Tailwind v4 `@theme` for utilities, a
 | Colour | `--accent-dark` / `--btn-bg` | `#d90429` | Primary button fill (white text) |
 | Colour | `--focus` | `#ffffff` | Focus ring |
 | Colour | `--border` / `--rule` | `#71717a` / `#27272a` | Control borders (3:1 or more) and decorative rules |
+| Colour | `--accent-2` | `#a78bfa` (violet-400) | Secondary decorative accent (Tailwind `accent-2`) |
+| Colour | `--accent-3` | `#38bdf8` (sky-400) | Third decorative accent (Tailwind `accent-3`) |
+| Colour | `--heading` | `#ffffff` | h1/h2 |
+| Colour | `--label` | `#d4d4d8` (zinc-300) | Labels: `dt`, table captions, hints, card-mode cell labels |
 | Status | `--ok-*` | text `#86efac` on `#052e16` | Success |
 | Status | `--warn-*` | text `#fcd34d` on `#3b2400` | Pending or warning |
 | Status | `--bad-*` | text `#fca5a5` on `#450a0a` | Blocked, degraded, revoked |
@@ -34,6 +38,18 @@ Defined in `apps/web/src/app/globals.css`: Tailwind v4 `@theme` for utilities, a
 | Motion | `--duration-fast/base/slow` | 150 / 300 / 400 ms | Transitions |
 | Size | `--target` | `2.75rem` (44px) | Minimum interactive height and width |
 | Fonts | `--font-display`, `--font-sans`, `--font-mono` | Manrope, Inter, system mono | Headings, body, data |
+
+## Colour decision
+Moderate extra colour, decorative and categorical only. Red `#ef233c` stays the only brand and primary-action colour.
+- Two secondary accents: violet `--accent-2: #a78bfa` and sky `--accent-3: #38bdf8`. Both are above 7:1 on `#000000`, `#0a0a0a` and `#1a0505` (checked in `test/contrast.test.ts`).
+- Where: a 3px red left bar on page-section `h2`s and panel headings; Overview stat cards get a top border cycling red, violet, sky, red; landing feature icon tiles and how-it-works numbers cycle red, violet, sky; landing eyebrows in sky; "Built on" chips with a violet border; table headers in violet on a faint violet band; empty states with a violet dashed border; audit event names in sky. Headings are white and bolder; labels moved from zinc-400 to zinc-300. Checkboxes use the red `accent-color`.
+- Not for status. Status chips keep their green/amber/red/neutral tokens plus icon and text. The new hues never appear on a status chip.
+
+## Layout notes
+- The authenticated nav collapses to the Menu button below `lg` (1024px), not `md`, so 768 px gets the Menu button and 1280 px fits on one row (links and "Sign out" are `whitespace-nowrap`; the business name truncates with a `title`).
+- `main` is `72rem` wide (same as the pill nav) with `0.75rem` side padding so content and nav edges line up.
+- Below 40em tables become cards with label and value on one line; the header row is visually hidden with the full sr-only pattern so nothing sits off-canvas.
+- `devIndicators: false` in `next.config.ts` hides the Next dev indicator, which renders unstyled under the strict CSP. Production is unaffected.
 
 ## Components
 

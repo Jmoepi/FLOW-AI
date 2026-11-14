@@ -179,8 +179,9 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
       <div inert={review !== null}>
         <h1>Payment policies</h1>
         <p className="guard-note">These limits are enforced by Flow AI&apos;s independent payment service. The AI agent cannot change them.</p>
-        <p>
-          Automation is{" "}
+        <div className="panel">
+        <p className="status-line">
+          <span>Automation is</span>{" "}
           {saved.enabled ? <StatusBadge tone="ok" label="On" /> : <StatusBadge tone="neutral" label="Paused" />} <span>{updated}</span>
         </p>
         {saved.enabled ? (
@@ -192,6 +193,7 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
             <span className="hint">Stops all automated payments immediately.</span>
           </p>
         ) : null}
+        </div>
         <form onSubmit={onSubmit} noValidate aria-label="Payment policy">
           {hasSummary ? (
             <div className="error-summary" role="alert" tabIndex={-1} ref={summaryRef}>
@@ -267,9 +269,11 @@ export function PolicyForm({ initial, timezone, pair }: Props): ReactNode {
               </div>
             ) : null}
           </fieldset>
-          <button id="save-policy" type="submit" className="btn" disabled={busy}>
-            Save changes
-          </button>
+          <div className="form-actions">
+            <button id="save-policy" type="submit" className="btn" disabled={busy}>
+              Save changes
+            </button>
+          </div>
         </form>
       </div>
       <p role="status" aria-live="polite" className="status">
