@@ -26,7 +26,7 @@ export function Starfield(): ReactNode {
   const rand = mulberry32(0x464c4f57);
   const groups = GROUPS.map((g) => ({ ...g, stars: Array.from({ length: g.count }, () => ({ x: r2(rand() * 1000), y: r2(rand() * SPAN) })) }));
   return (
-    <svg aria-hidden="true" focusable="false" className="pointer-events-none fixed inset-0 -z-10 h-full w-full overflow-visible fill-white opacity-70" viewBox={`0 0 1000 ${SPAN}`} preserveAspectRatio="xMidYMid slice">
+    <svg aria-hidden="true" focusable="false" className="pointer-events-none fixed inset-0 -z-10 h-full w-full overflow-hidden fill-white opacity-70" viewBox={`0 0 1000 ${SPAN}`} preserveAspectRatio="xMidYMid slice">
       {groups.map((g) => (
         <g key={g.cls} className={`${g.cls} optimize-gpu`}>
           {[0, SPAN].map((dy) => (

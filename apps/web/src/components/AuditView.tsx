@@ -20,7 +20,7 @@ export function AuditView({ page, timezone }: { page: AuditPage; timezone: strin
             return (
               <li key={e.seq}>
                 <p>
-                  <strong className="event-type">{e.event_type}</strong> by {ACTOR[e.actor] ?? e.actor}
+                  <strong className="event-type text-accent-3">{e.event_type}</strong> by {ACTOR[e.actor] ?? e.actor}
                 </p>
                 <p className="hint">{formatInstant(e.created_at, timezone)}</p>
                 {rows.length > 0 ? (

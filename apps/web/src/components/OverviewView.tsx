@@ -44,7 +44,7 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
       <p className="lede">
         {data.business.name} on {data.network}. Amounts are test RLUSD with no real value.
       </p>
-      <p>
+      <p className="status-line">
         <StatusBadge tone={state.tone} icon={state.icon} label={state.label} /> <span>{state.text}</span>
       </p>
       <h2>What the agent may do</h2>
@@ -85,7 +85,7 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
       </p>
       <section className="panel" aria-labelledby="key-title">
         <h2 id="key-title">Guard signing key</h2>
-        <p role={data.signing_key.state === "revoked" ? "alert" : undefined}>
+        <p className="status-line" role={data.signing_key.state === "revoked" ? "alert" : undefined}>
           <StatusBadge tone={SIGNING_KEY[data.signing_key.state].tone} icon={SIGNING_KEY[data.signing_key.state].icon} label={SIGNING_KEY[data.signing_key.state].label} />{" "}
           <span>{SIGNING_KEY[data.signing_key.state].text}</span>
         </p>
@@ -95,14 +95,14 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
       </section>
       <section className="panel" aria-labelledby="agent-title">
         <h2 id="agent-title">Treasury agent</h2>
-        <p>
+        <p className="status-line">
           <StatusBadge tone={agent.tone} icon={agent.icon} label={agent.label} />{" "}
           {run === null ? (
-            "The agent has not run yet."
+            <span>The agent has not run yet.</span>
           ) : (
-            <>
+            <span>
               Last run {formatInstant(run.started_at, tz)}, {triggerLabel(run.trigger).toLowerCase()}. Result: {outcomeOf(run.status).label}.
-            </>
+            </span>
           )}
         </p>
         {decision === null ? null : (
@@ -111,7 +111,7 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
           </p>
         )}
         <RunAgentButton initial={data.agent.run_request} />
-        <p>
+        <p className="mt-3 mb-0">
           <a href="/agent">See Agent activity</a>
         </p>
       </section>
@@ -134,8 +134,8 @@ export function OverviewView({ data, policy }: { data: OverviewData; policy: Pol
       ) : (
         <PaymentTable payments={data.recent_payments} timezone={tz} caption="Most recent payments" />
       )}
-      <p>
-        <a href="/payments">All payments</a> · <a href="/audit">Audit trail</a> · <a href="/policy">Payment policies</a>
+      <p className="link-row">
+        <a href="/payments">All payments</a> <a href="/audit">Audit trail</a> <a href="/policy">Payment policies</a>
       </p>
       <p className="hint">The payment service decides on every request. This page shows stored results and never guesses whether an invoice will be paid.</p>
     </>

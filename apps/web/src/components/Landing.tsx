@@ -34,6 +34,9 @@ const WILL_NOT: string[] = [
   "Claim on-ledger enforcement of every limit. The limits are enforced by the guard at the application layer, and the regular key is the on-ledger backstop.",
 ];
 const BUILT_ON = ["XRP Ledger (Testnet)", "RLUSD", "Model Context Protocol (MCP)"];
+/** Decorative colour cycle (red, violet, sky) for icon tiles and step numbers; never used for status. */
+const TINT = ["bg-accent/10 text-accent", "bg-accent-2/10 text-accent-2", "bg-accent-3/10 text-accent-3"];
+const INK = ["text-accent", "text-accent-2", "text-accent-3"];
 export function Landing(): ReactNode {
   return (
     <>
@@ -101,7 +104,7 @@ export function Landing(): ReactNode {
         <Section id="built-on" heading="Built on" className="py-8">
           <ul className="mt-4 flex list-none flex-wrap gap-3 p-0">
             {BUILT_ON.map((b) => (
-              <li key={b} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-mono text-sm text-zinc-200">
+              <li key={b} className="rounded-full border border-accent-2/40 bg-white/5 px-4 py-2 font-mono text-sm text-zinc-100">
                 {b}
               </li>
             ))}
@@ -109,10 +112,10 @@ export function Landing(): ReactNode {
         </Section>
         <Section id="capabilities" eyebrow="Capabilities" heading="Limits you can check, not just trust">
           <ul className="mt-10 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
-            {CAPABILITIES.map((c) => (
+            {CAPABILITIES.map((c, i) => (
               <li key={c.title} className="flex">
                 <GlassCard className="w-full">
-                  <span className="inline-flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white">
+                  <span className={`inline-flex size-10 items-center justify-center rounded-xl border border-white/10 ${TINT[i % TINT.length]}`}>
                     <Icon name={c.icon} className="size-5" />
                   </span>
                   <h3 className="mt-4 mb-2 font-display text-lg font-semibold text-white">{c.title}</h3>
@@ -122,7 +125,7 @@ export function Landing(): ReactNode {
             ))}
             <li className="flex sm:col-span-2 lg:col-span-1">
               <GlassCard className="w-full">
-                <p className="m-0 text-xs font-medium tracking-widest text-zinc-400 uppercase">Illustrative example, not live data</p>
+                <p className="m-0 text-xs font-medium tracking-widest text-zinc-300 uppercase">Illustrative example, not live data</p>
                 <p className="mt-4 mb-0 flex items-center gap-2 rounded-xl border border-white/10 bg-black/60 p-3 font-mono text-sm text-zinc-100">
                   <Icon name="shield-x" className="size-4 shrink-0" />
                   Blocked: request above the owner&apos;s limit
@@ -139,7 +142,7 @@ export function Landing(): ReactNode {
           <ol className="mt-10 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-5">
             {STEPS.map((s, i) => (
               <li key={s.title} className="rounded-3xl border border-white/10 bg-black/60 p-5">
-                <span className="font-mono text-sm text-zinc-400">{String(i + 1).padStart(2, "0")}</span>
+                <span className={`font-mono text-sm font-semibold ${INK[i % INK.length]}`}>{String(i + 1).padStart(2, "0")}</span>
                 <h3 className="mt-2 mb-2 font-display text-base font-semibold text-white">{s.title}</h3>
                 <p className="m-0 text-sm text-zinc-300">{s.body}</p>
               </li>

@@ -29,13 +29,15 @@ const TEXT_PAIRS: [string, string][] = [
   ["muted", "glow-bottom"], ["text", "glow-bottom"], ["accent-ink", "accent"], ["btn-text", "accent-dark"],
   ["accent", "bg"], ["link", "glow-bottom"], ["ok-text", "bg"], ["warn-text", "bg"],
   // Template surfaces: zinc-400 body text on black, on the glass card (black at 60% over bg), and on the red-tinted bottom glow.
+  ["accent-2", "bg"], ["accent-2", "surface"], ["accent-2", "glow-bottom"], ["accent-3", "bg"], ["accent-3", "surface"], ["accent-3", "glow-bottom"],
+  ["heading", "bg"], ["heading", "surface"], ["heading", "glow-bottom"], ["label", "bg"], ["label", "surface"], ["label", "glow-bottom"],
   ["muted", "btn2-bg"], ["text", "btn2-bg"], ["neutral-text", "neutral-bg"], ["net-text", "bg"], ["bad-text", "bad-bg"],
 ];
 describe("colour tokens", () => {
   it.each(TEXT_PAIRS)("text %s on %s is at least 4.5:1", (fg, bg) => {
     expect(ratio(tok(fg), tok(bg))).toBeGreaterThanOrEqual(4.5);
   });
-  it.each([["focus", "bg"], ["focus", "surface"], ["border", "bg"], ["bad-text", "bg"], ["accent", "bg"], ["focus", "accent"], ["focus", "btn-bg"]] as [string, string][])("non-text %s against %s is at least 3:1", (fg, bg) => {
+  it.each([["focus", "bg"], ["focus", "surface"], ["border", "bg"], ["bad-text", "bg"], ["accent", "bg"], ["focus", "accent"], ["focus", "btn-bg"], ["accent-2", "bg"], ["accent-3", "bg"]] as [string, string][])("non-text %s against %s is at least 3:1", (fg, bg) => {
     expect(ratio(tok(fg), tok(bg))).toBeGreaterThanOrEqual(3);
   });
   it("the ratio helper matches a known value (black on white is 21:1)", () => {

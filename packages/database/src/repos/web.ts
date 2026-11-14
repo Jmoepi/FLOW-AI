@@ -232,6 +232,11 @@ export async function bumpAttempt(q: Queryable, keyHash: string, windowStart: Da
   if (!r) throw new DbError("DB_ERROR");
   return r.attempts;
 }
+/** Dev tooling only: deletes every login-attempt counter (they are keyed by one-way hashes, so per-user deletion is impossible). Returns rows removed. */
+export async function clearLoginAttempts(q: Queryable): Promise<number> {
+  const rows = await run<{ key_hash: string }>(q, "DELETE FROM login_attempts RETURNING key_hash");
+  return rows.length;
+}
 export async function getAttempts(q: Queryable, keyHash: string, windowStart: Date): Promise<number> {
   const r = await runOne<{ attempts: number }>(q, "SELECT attempts FROM login_attempts WHERE key_hash = $1 AND window_start = $2", [hex64(keyHash), windowStart]);
   return r?.attempts ?? 0;
