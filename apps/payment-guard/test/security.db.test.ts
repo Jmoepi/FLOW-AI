@@ -73,7 +73,7 @@ describe("HTTP hardening on the real stack", () => {
   it("readyz reports healthy with the real pool and gateway, and exposes only flags", async () => {
     const res = await raw("GET", "/readyz", {});
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: "ok", db: true, ledger: true, audit_chain: "unverified", audit_verified_at: null });
+    expect(res.json()).toEqual({ status: "ok", db: true, ledger: true, audit_chain: "unverified", audit_verified_at: null, signing_key: "master_env" });
   });
   it("429 with Retry-After once the per-IP limit is hit", async () => {
     const codes: number[] = [];

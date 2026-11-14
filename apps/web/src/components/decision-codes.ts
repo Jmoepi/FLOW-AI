@@ -27,6 +27,7 @@ const TABLE: Record<DecisionCode, DecisionExplanation> = {
   PAYMENT_ALREADY_IN_PROGRESS: { title: "Payment already in progress", plain: "This invoice already has a payment that is being processed or is paid.", whatToDo: "Wait for it to finish. Nothing was sent twice." },
   NETWORK_NOT_ALLOWED: { title: "Network not allowed", plain: "Only the XRPL Testnet is allowed in this demo.", whatToDo: "No action is possible from the dashboard." },
   XRPL_SUBMISSION_FAILED: { title: "The ledger did not accept the payment", plain: "The payment was approved by your rules but the ledger rejected or lost it.", whatToDo: "Check the payment detail. You may retry from the agent." },
+  SIGNING_KEY_REVOKED: { title: "Guard signing key revoked", plain: "The ledger refused the guard's signing key, so this payment was not sent and no money moved. Payments are paused.", whatToDo: "Register a new guard key with the owner script (pnpm owner:set-regular-key). Then the guard resumes on its own." },
   PARTIAL_DELIVERY: { title: "Partly delivered", plain: "The ledger delivered less than the invoice amount.", whatToDo: "Review the payment detail and contact the supplier." },
   VALIDATION_PENDING: { title: "Waiting for the ledger", plain: "The payment was sent and is waiting for the ledger to confirm it.", whatToDo: "No action needed. It is only shown as paid once confirmed." },
   INVALID_REQUEST: { title: "Request not valid", plain: "The payment service could not read the request, so it did nothing.", whatToDo: "No action needed. Nothing was paid." },

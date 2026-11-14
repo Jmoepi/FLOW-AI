@@ -214,3 +214,9 @@ export async function releaseWalletSessionLock(q: Queryable, walletId: string): 
 export async function lockWalletForSigning(q: Queryable, walletId: string): Promise<void> {
   await run(q, "SELECT pg_advisory_xact_lock(hashtextextended('wallet:' || $1::text, 0))", [uuid(walletId)]);
 }
+
+/** Highest LastLedgerSequence among this wallet's payments that failed with SIGNING_KEY_REVOKED (M7 restore rule), or null. */
+export async function latestSigningKeyRejectionLedger(q: Queryable, walletId: string): Promise<number | null> {
+  const row = await runOne<{ lls: number | null }>(q, "SELECT max(last_ledger_sequence) AS lls FROM payments WHERE wallet_id = $1 AND failure_code = 'SIGNING_KEY_REVOKED'", [uuid(walletId)]);
+  return row?.lls ?? null;
+}

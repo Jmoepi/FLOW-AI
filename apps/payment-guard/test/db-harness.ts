@@ -6,12 +6,14 @@ import { buildApp, type GuardApp } from "../src/app";
 import { loadConfig, type GuardConfig } from "../src/config";
 import { createReconciler, type Reconciler } from "../src/jobs/reconcile";
 import { createLogger } from "../src/logger";
+import { createSigningKeyHealth, type SigningKeyHealth } from "../src/state/signing-key";
 import { createExecutor, type PaymentExecutor } from "../src/services/execute";
 import type { ServiceDeps } from "../src/services/payments";
 import { CURRENCY_HEX, ISSUER } from "./payment-fixtures";
 import { TOKEN, validEnv } from "./helpers";
 /** Integration harness: real Postgres (throwaway DB, least-privilege role), real guard signer, scriptable fake ledger. */
-export type SubmitMode = "validate" | "tec" | "partial" | "hold" | "throw";
+/** "reject_auth": the ledger refuses the signature at submit (revoked regular key): tefBAD_AUTH, nothing recorded. */
+export type SubmitMode = "validate" | "tec" | "partial" | "hold" | "throw" | "reject_auth";
 export interface SubmitRecord {
   blob: string;
   hash: string;
@@ -23,6 +25,9 @@ export class FakeLedger {
   balance: string | null = "100";
   xrpDrops = "100000000";
   ownerCount = 1;
+  /** The treasury's RegularKey address as the ledger reports it (M7). */
+  regularKey: string | null = null;
+  ledgerIndexOverride: number | null = null;
   trustline: TrustLineState = "present";
   mode: SubmitMode = "validate";
   submitDelayMs = 0;
@@ -51,6 +56,7 @@ export class FakeLedger {
         if (this.submitDelayMs > 0) await new Promise((r) => setTimeout(r, this.submitDelayMs));
         this.submits.push({ blob, hash, startedAt, endedAt: Date.now() });
         if (this.mode === "throw") throw new Error("connection reset");
+        if (this.mode === "reject_auth") return { engineResult: "tefBAD_AUTH" };
         if (this.mode === "validate") this.validate(hash);
         else if (this.mode === "tec") this.validate(hash, "tecPATH_DRY");
         else if (this.mode === "partial") {
@@ -66,7 +72,7 @@ export class FakeLedger {
       lookupTx: (hash: string): Promise<TxLookup> => Promise.resolve(this.known.get(hash) ?? { status: "not_found", searchedAll: this.searchedAll }),
       getAccountSnapshot: (account: string): Promise<AccountSnapshot> => {
         if (account !== this.reportAccount()) return Promise.reject(new Error("unknown account"));
-        return Promise.resolve({ xrpDrops: this.xrpDrops, ownerCount: this.ownerCount, rlusdBalance: this.balance, ledgerIndex: this.validated });
+        return Promise.resolve({ xrpDrops: this.xrpDrops, ownerCount: this.ownerCount, rlusdBalance: this.balance, ledgerIndex: this.ledgerIndexOverride ?? this.validated, regularKey: this.regularKey, masterDisabled: false });
       },
       getReserves: (): Promise<Reserves> => Promise.resolve({ baseReserveDrops: "1000000", ownerReserveDrops: "200000" }),
       getDestinationTrustLine: (): Promise<TrustLineState> => Promise.resolve(this.trustline),
@@ -78,6 +84,9 @@ export class FakeLedger {
 export interface Harness {
   db: TestDatabase;
   wallet: Wallet;
+  /** The guard's regular key keypair when the harness runs in regular-key mode. */
+  regularWallet: Wallet | undefined;
+  signingKey: SigningKeyHealth;
   supplierAddress: string;
   env: NodeJS.ProcessEnv;
   ledger: FakeLedger;
@@ -101,19 +110,23 @@ export interface Harness {
 }
 export interface HarnessOptions {
   config?: Partial<GuardConfig>;
+  /** Sign with a revocable regular key (M7): the environment then holds ONLY XRPL_REGULAR_KEY_SEED, never the master seed. */
+  regularKey?: boolean;
 }
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const db = await createTestDatabase();
   const wallet = Wallet.generate();
   const supplierAddress = Wallet.generate().address;
-  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PAYMENT_EXECUTION_ENABLED: "true", XRPL_DEMO_SIGNER_SEED: wallet.seed };
+  const regularWallet = options.regularKey === true ? Wallet.generate() : undefined;
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PAYMENT_EXECUTION_ENABLED: "true", ...(regularWallet ? { XRPL_REGULAR_KEY_SEED: regularWallet.seed } : { XRPL_DEMO_SIGNER_SEED: wallet.seed }) };
   const ledger = new FakeLedger(() => wallet.address);
   const logs: string[] = [];
   const bodies: string[] = [];
   const config: GuardConfig = { ...loadConfig(validEnv()), rateLimitPerMinute: 1000, paymentWaitSeconds: 3, ...options.config };
   const logger = createLogger((l) => logs.push(l));
   const gateway = ledger.asGateway();
-  const base: ServiceDeps = { pool: db.guardPool, gateway, config, env: () => env, logger };
+  const signingKey = createSigningKeyHealth({ pool: db.guardPool, config, env: () => env, logger });
+  const base: ServiceDeps = { pool: db.guardPool, gateway, config, env: () => env, logger, signingKey };
   const executor = createExecutor(base);
   const deps: ServiceDeps = { ...base, executor };
   const reconciler = createReconciler(deps);
@@ -127,7 +140,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     return { status: res.statusCode, body: (res.body.startsWith("{") ? JSON.parse(res.body) : {}) as Record<string, unknown>, raw: res.body };
   };
   return {
-    db, wallet, supplierAddress, env, ledger, config, logs, bodies, deps, reserveOnlyDeps: base, executor, reconciler, guard,
+    db, wallet, regularWallet, signingKey, supplierAddress, env, ledger, config, logs, bodies, deps, reserveOnlyDeps: base, executor, reconciler, guard,
     scenario: (o = {}) => seedScenario(db.adminPool, { walletAddress: wallet.address, supplierAddress, issuer: ISSUER, currencyHex: CURRENCY_HEX, ...o }),
     invoice: (s, o = {}) => seedInvoice(db.adminPool, s, o),
     post: (invoiceId, key, extra = {}) => send("POST", "/internal/payment-requests", { invoice_id: invoiceId, idempotency_key: key, ...extra }),
@@ -154,6 +167,7 @@ export async function assertNoLeaks(h: Harness, blobs: readonly string[] = h.led
   const problems: string[] = [];
   const needles: [string, string][] = [
     ["wallet seed", h.wallet.seed as string],
+    ...(h.regularWallet ? [["regular key seed", h.regularWallet.seed as string] as [string, string]] : []),
     ["bearer token", TOKEN],
     ["database password", h.db.secrets.guardPassword],
     ...blobs.map((b): [string, string] => ["signed blob", b]),

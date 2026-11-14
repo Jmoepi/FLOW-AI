@@ -25,6 +25,7 @@ export const DECISION_CODES = [
   "XRPL_SUBMISSION_FAILED",
   "PARTIAL_DELIVERY",
   "VALIDATION_PENDING",
+  "SIGNING_KEY_REVOKED",
   // Engine-only additions (not in 9.3).
   "INVALID_REQUEST",
   "INVALID_AMOUNT",

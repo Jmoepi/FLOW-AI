@@ -19,6 +19,7 @@ export interface PaymentExecutor {
 const CANCEL_MESSAGES: Record<string, string> = {
   EXECUTION_DISABLED: "Payment execution is disabled.",
   RECORD_INACTIVE: "The treasury wallet is not available for signing.",
+  SIGNING_KEY_REVOKED: "The guard signing key was revoked. Execution is blocked until the owner restores a valid key.",
 };
 
 async function safeAudit(deps: ServiceDeps, paymentId: string, businessId: string, event: string, metadata: Record<string, unknown>): Promise<void> {
@@ -42,7 +43,11 @@ export function createExecutor(deps: ServiceDeps): PaymentExecutor {
     const p = await getPayment(pool, paymentId);
     if (!p || p.status !== "reserved") return p; // re-read inside the lock: someone else (sweeper) may have moved it
     const wallet = await getWallet(pool, walletId);
-    if (!wallet || !wallet.is_active || wallet.signing_key_mode !== "master_env" || wallet.network !== config.network || p.network !== config.network) {
+    if (wallet?.signing_key_mode === "revoked") {
+      return (await cancelUnsigned(pool, p.id, "SIGNING_KEY_REVOKED", CANCEL_MESSAGES.SIGNING_KEY_REVOKED ?? "", GUARD_ACTOR)) ?? (await getPayment(pool, p.id));
+    }
+    // master_env (dev) and regular_key (M7, 10.8) may sign; "revoked" never does, whatever the environment (fail closed).
+    if (!wallet || !wallet.is_active || (wallet.signing_key_mode !== "master_env" && wallet.signing_key_mode !== "regular_key" && wallet.signing_key_mode !== "revoked") || wallet.network !== config.network || p.network !== config.network) {
       return (await cancelUnsigned(pool, p.id, "RECORD_INACTIVE", CANCEL_MESSAGES.RECORD_INACTIVE ?? "", GUARD_ACTOR)) ?? (await getPayment(pool, p.id));
     }
     const enabled = (): boolean => killSwitchValue(deps) === "true";
@@ -79,7 +84,10 @@ export function createExecutor(deps: ServiceDeps): PaymentExecutor {
         },
       });
       if (sent.outcome === undefined) return await getPayment(pool, p.id);
-      return await applyOutcome(pool, p.id, sent.outcome, GUARD_ACTOR);
+      const settled = await applyOutcome(pool, p.id, sent.outcome, GUARD_ACTOR);
+      // The ledger refused the signature: flip the guard to the visible, persisted "signing key revoked" state (fail closed).
+      if (sent.outcome.kind === "rejected_authorization") await deps.signingKey?.markRevoked(wallet, { paymentId: p.id, engineResult: sent.outcome.engineResult });
+      return settled;
     } catch (err) {
       const code = err instanceof SignerError ? err.code : "XRPL_SUBMISSION_FAILED";
       deps.logger.error("payment.execute_failed", { payment_id: p.id, code, error: redactError(err) });

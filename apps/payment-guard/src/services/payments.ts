@@ -14,6 +14,7 @@ import { loadCanonical, loadReservationsAndPayments, reloadCanonical, type Canon
 import { HttpError } from "../http/errors";
 import type { AuditIntegrity } from "../jobs/audit-verify";
 import type { Reconciler } from "../jobs/reconcile";
+import type { SigningKeyHealth, SigningKeyStatusMode } from "../state/signing-key";
 import type { Logger } from "../logger";
 import { invoiceStatusFor, isInFlight } from "../state/payment-machine";
 import type { PaymentExecutor } from "./execute";
@@ -30,10 +31,13 @@ export interface ServiceDeps {
   reconciler?: Reconciler;
   /** Audit chain verify state (AL-3). When it reports a break, execution is blocked like the kill switch. */
   integrity?: AuditIntegrity;
+  /** Regular-key health (M7). When the ledger rejected the guard's key, execution is blocked like a broken audit chain. */
+  signingKey?: SigningKeyHealth;
 }
 /** The kill switch value the policy engine sees. A detected, unacknowledged audit chain break forces it to "not true" (fail closed, 13.1C). */
-export function killSwitchValue(deps: Pick<ServiceDeps, "env" | "integrity">): string | undefined {
+export function killSwitchValue(deps: Pick<ServiceDeps, "env" | "integrity" | "signingKey">): string | undefined {
   const env = deps.env();
+  if (deps.signingKey?.blocked(env)) return "blocked:signing_key_revoked";
   return deps.integrity?.blocked(env) ? "blocked:audit_chain" : env.PAYMENT_EXECUTION_ENABLED;
 }
 const EXPLORER = "https://testnet.xrpl.org/transactions/";
@@ -300,14 +304,16 @@ export interface StatusView {
   automation: "enabled" | "disabled" | "unknown";
   snapshot_as_of: string | null;
   audit_chain: "unverified" | "ok" | "broken" | "error";
+  signing_key: SigningKeyStatusMode;
 }
 export async function getStatus(deps: ServiceDeps): Promise<StatusView> {
   const { pool, config } = deps;
   const kill_switch = killSwitchValue(deps) === "true" ? "enabled" : "disabled";
   const audit_chain = deps.integrity?.status(deps.env()).state ?? "unverified";
+  const signing_key = deps.signingKey?.status(deps.env()).mode ?? "master_env";
   const business = config.businessId === undefined ? null : await getBusiness(pool, config.businessId);
-  if (!business) return { kill_switch, automation: "unknown", snapshot_as_of: null, audit_chain };
+  if (!business) return { kill_switch, automation: "unknown", snapshot_as_of: null, audit_chain, signing_key };
   const [policy, wallet] = await Promise.all([getPolicy(pool, business.id), getActiveWalletForBusiness(pool, business.id)]);
   const snapshot = wallet ? await getLatestSnapshot(pool, wallet.id) : null;
-  return { kill_switch, automation: policy === null ? "unknown" : policy.enabled ? "enabled" : "disabled", snapshot_as_of: snapshot?.as_of ?? null, audit_chain };
+  return { kill_switch, automation: policy === null ? "unknown" : policy.enabled ? "enabled" : "disabled", snapshot_as_of: snapshot?.as_of ?? null, audit_chain, signing_key };
 }

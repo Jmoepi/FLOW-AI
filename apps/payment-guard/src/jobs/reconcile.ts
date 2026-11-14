@@ -46,6 +46,7 @@ export function createReconciler(deps: ServiceDeps): Reconciler {
   async function run(): Promise<ReconcileCounts> {
     const counts: ReconcileCounts = { checked: 0, validated: 0, failed: 0, pending: 0, resubmitted: 0 };
     const seen = new Set<string>();
+    const rejected: { walletId: string; businessId: string; paymentId: string; engineResult: string }[] = [];
     for (let i = 0; i < MAX_PER_RUN; i++) {
       // One payment per transaction: the row lock (SKIP LOCKED) is held only for that payment's network round trips.
       const step = await withTransaction(deps.pool, async (c) => {
@@ -63,6 +64,7 @@ export function createReconciler(deps: ServiceDeps): Reconciler {
         if (!found) return "next" as const;
         if (found.resubmitted) counts.resubmitted++;
         const row = await applyOutcomeIn(c, p.id, found.outcome, SYSTEM_ACTOR);
+        if (found.outcome.kind === "rejected_authorization") rejected.push({ walletId: p.wallet_id, businessId: p.business_id, paymentId: p.id, engineResult: found.outcome.engineResult });
         if (row?.status === "validated") counts.validated++;
         else if (row?.status === "failed") counts.failed++;
         else counts.pending++;
@@ -70,6 +72,8 @@ export function createReconciler(deps: ServiceDeps): Reconciler {
       }, { maxAttempts: 1 });
       if (step === "done") break;
     }
+    // After the commits: markRevoked opens its own transaction. A refused resubmit must flip the guard like the executor path.
+    for (const r of rejected) await deps.signingKey?.markRevoked({ id: r.walletId, business_id: r.businessId }, { paymentId: r.paymentId, engineResult: r.engineResult });
     return counts;
   }
 

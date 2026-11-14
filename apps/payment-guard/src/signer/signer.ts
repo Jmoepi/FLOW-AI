@@ -6,6 +6,25 @@ import { issuedAmountsEqual, type IssuedAmount, type Signer } from "@flow-ai/xrp
  * other file under apps/ or packages/. The seed is read lazily at sign time, used inside one call and never stored.
  */
 const SEED_VARIABLE = "XRPL_DEMO_SIGNER_SEED";
+/** M7 (10.8): when present this revocable regular key signs INSTEAD of the master. The master seed is then never read. */
+const REGULAR_KEY_VARIABLE = "XRPL_REGULAR_KEY_SEED";
+
+/** Which key signs, decided from the environment: a configured regular key always wins over the master (10.8). Public info only. */
+export function signerMode(env: NodeJS.ProcessEnv): "regular_key" | "master_env" {
+  const v = env[REGULAR_KEY_VARIABLE];
+  return typeof v === "string" && v !== "" ? "regular_key" : "master_env";
+}
+
+/** The PUBLIC address of the configured regular key, or null when none is configured or it is malformed. Never returns a seed. */
+export function regularKeyAddress(env: NodeJS.ProcessEnv): string | null {
+  const seed = env[REGULAR_KEY_VARIABLE];
+  if (typeof seed !== "string" || seed === "") return null;
+  try {
+    return Wallet.fromSeed(seed).address;
+  } catch {
+    return null;
+  }
+}
 
 export type SignerErrorCode = "EXECUTION_DISABLED" | "NETWORK_REFUSED" | "SEED_UNAVAILABLE" | "ACCOUNT_MISMATCH" | "TX_REFUSED";
 
@@ -65,15 +84,21 @@ export function createGuardSigner(instruction: SigningInstruction, deps: SignerD
       if (deps.network !== "xrpl-testnet") throw new SignerError("NETWORK_REFUSED");
       if (deps.env().PAYMENT_EXECUTION_ENABLED !== "true" || !deps.isExecutionEnabled()) throw new SignerError("EXECUTION_DISABLED");
       assertMatchesInstruction(tx, snapshot);
-      const seed = deps.env()[SEED_VARIABLE];
+      const env = deps.env();
+      const regular = signerMode(env) === "regular_key";
+      const seed = env[regular ? REGULAR_KEY_VARIABLE : SEED_VARIABLE];
       if (typeof seed !== "string" || seed === "") throw new SignerError("SEED_UNAVAILABLE");
+      let plain: Wallet;
       let wallet: Wallet;
       try {
-        wallet = Wallet.fromSeed(seed);
+        // A regular key has its own address; it signs FOR the treasury (Account stays the treasury, 10.6).
+        plain = Wallet.fromSeed(seed);
+        wallet = regular ? Wallet.fromSeed(seed, { masterAddress: snapshot.account }) : plain;
       } catch {
         throw new SignerError("SEED_UNAVAILABLE"); // never chain the cause: it could echo the seed
       }
-      if (wallet.address !== snapshot.account) throw new SignerError("ACCOUNT_MISMATCH");
+      // Master mode: the seed must be the treasury's own. Regular mode: the key must NOT be the master (it is a separate keypair).
+      if (regular ? plain.address === snapshot.account : plain.address !== snapshot.account) throw new SignerError("ACCOUNT_MISMATCH");
       try {
         const signed = wallet.sign(tx);
         return { txBlob: signed.tx_blob, hash: signed.hash };

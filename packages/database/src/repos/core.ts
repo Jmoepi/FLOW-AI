@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DbError } from "../errors";
 import { isoOrNull, moneyOut, run, runOne, uuid, type Queryable } from "../db";
-import type { BusinessRow, InvoiceRow, InvoiceStatus, PolicyRow, SupplierRow, WalletRow } from "./types";
+import type { BusinessRow, InvoiceRow, InvoiceStatus, PolicyRow, SigningKeyMode, SupplierRow, WalletRow } from "./types";
 
 /** Reads of owner-controlled records (businesses, wallets, suppliers, invoices, policies). */
 
@@ -136,3 +136,12 @@ export async function lockPolicyForUpdate(q: Queryable, businessId: string): Pro
   return getPolicy(q, id);
 }
 
+
+/**
+ * Guard-only (M7): moves a wallet between signing key modes. Compare-and-set on the expected current mode; the database
+ * trigger additionally limits the possible transitions. Returns true when the row changed.
+ */
+export async function setWalletSigningKeyMode(q: Queryable, walletId: string, from: SigningKeyMode, to: SigningKeyMode): Promise<boolean> {
+  const row = await runOne<{ id: string }>(q, "UPDATE treasury_wallets SET signing_key_mode = $3 WHERE id = $1 AND signing_key_mode = $2 RETURNING id", [uuid(walletId), from, to]);
+  return row !== null;
+}

@@ -50,7 +50,7 @@ describe("migrations", () => {
     try {
       const again = await migrate(c);
       expect(again.applied).toEqual([]);
-      expect(again.skipped.length).toBe(10);
+      expect(again.skipped.length).toBe(11);
     } finally {
       await c.end();
     }

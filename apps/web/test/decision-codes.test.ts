@@ -4,7 +4,7 @@ import { DECISION_TABLE_CODES, explainDecision } from "../src/components/decisio
 describe("decision code explanations", () => {
   it("covers every decision code, so a new code without an entry fails here", () => {
     expect([...DECISION_TABLE_CODES].sort()).toEqual([...DECISION_CODES].sort());
-    expect(DECISION_CODES.length).toBe(28);
+    expect(DECISION_CODES.length).toBe(29);
   });
   it.each([...DECISION_CODES])("%s has a non-empty plain-language explanation with no markup", (code) => {
     const e = explainDecision(code);
